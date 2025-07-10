@@ -1,26 +1,8 @@
-import { json } from "stream/consumers"
 import { useEffect, useRef, useState } from "react"
-import ConnectionStatus from "@/dashboard/components/connection-status"
-import { MainNav } from "@/dashboard/components/main-nav"
-import { Overview } from "@/dashboard/components/overview"
-import { RecentSales } from "@/dashboard/components/recent-sales"
-import { Search } from "@/dashboard/components/search"
-import TeamSwitcher from "@/dashboard/components/team-switcher"
-import { UserNav } from "@/dashboard/components/user-nav"
 import { Icon } from "@iconify/react"
 import { invoke } from "@tauri-apps/api/core"
-import { openUrl } from "@tauri-apps/plugin-opener"
-import { ta } from "date-fns/locale"
 
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card"
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { DbInfo, Request, Response } from "@/components/types"
+import { DbInfo, Response } from "@/components/types"
 
 interface TableCardProps {
   name: string
@@ -28,6 +10,8 @@ interface TableCardProps {
   rowsInserted: number
   rows: number
   inserted: boolean
+  active: boolean
+  onClick: () => void
 }
 
 function TableCard({
@@ -36,9 +20,18 @@ function TableCard({
   rowsInserted,
   rows,
   inserted,
+  active,
+  onClick,
 }: TableCardProps) {
   return (
-    <div className="flex w-full items-center rounded border p-4 hover:bg-accent hover:text-accent-foreground">
+    <div
+      className={
+        "flex w-full items-center rounded border p-4 hover:bg-accent hover:text-accent-foreground" +
+        (active ? " bg-accent text-accent-foreground" : "")
+      }
+      onClick={onClick}
+      role="button"
+    >
       {inserted ? (
         <Icon
           icon="material-symbols:check-circle-rounded"
@@ -68,10 +61,6 @@ function TableCard({
   )
 }
 
-interface ListTablesProps {
-  dbInfo: DbInfo | null
-}
-
 interface TableEntry {
   parents: number
   rows: number
@@ -81,8 +70,17 @@ interface TableInfo {
   sortedTables: string[]
   tableData: Record<string, TableEntry>
 }
+interface ListTablesProps {
+  dbInfo: DbInfo | null
+  activeTable: string | null
+  setActiveTable: (activeTable: string | null) => void
+}
 
-export default function ListTables({ dbInfo }: ListTablesProps) {
+export default function ListTables({
+  dbInfo,
+  activeTable,
+  setActiveTable,
+}: ListTablesProps) {
   const [tableData, setTableData] = useState<TableInfo | null>(null)
 
   const [availableHeight, setAvailableHeight] = useState("")
@@ -152,16 +150,20 @@ export default function ListTables({ dbInfo }: ListTablesProps) {
       </div>
       <div className="mt-4 flex-1 space-y-4 overflow-y-auto">
         {tableData && tableData.sortedTables.length !== 0 ? (
-          tableData.sortedTables.map((table_name) => {
-            const entry = tableData?.tableData[table_name] as TableEntry
+          tableData.sortedTables.map((tableName) => {
+            const entry = tableData?.tableData[tableName] as TableEntry
             return (
               <TableCard
-                key={table_name}
-                name={table_name}
+                key={tableName}
+                name={tableName}
                 parents={entry.parents}
                 rowsInserted={0}
                 rows={entry.rows || 1999}
                 inserted={false}
+                active={tableName === activeTable}
+                onClick ={() => {
+                  setActiveTable(tableName)
+                }}
               />
             )
           })

@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react"
+import { useEffect, useRef, useState } from "react"
 import { Icon } from "@iconify/react"
 import {
   DropdownMenu,
@@ -50,7 +50,10 @@ export default function ConnectionStatus({
   const [showPassword, setShowPassword] = useState<boolean>(false)
   const [errorField, setErrorField] = useState<string | null>(null)
 
-  function fetchDbInfo(setDbInfo: (info: DbInfo) => void) {
+  const triggerRef = useRef<HTMLButtonElement>(null)
+  const [menuWidth, setMenuWidth] = useState<number | null>(null)
+
+  function fetchDbInfo() {
     console.log("Fetching DB info...")
     setDbConnecting(true)
     setTimeout(() => {
@@ -95,7 +98,7 @@ export default function ConnectionStatus({
       .then((unParsedResponse) => {
         const res = JSON.parse(unParsedResponse || "{}") as Response<boolean>
         if (res.status === "ok") {
-          fetchDbInfo(setDbInfo)
+          fetchDbInfo()
           setNewDbInfo((prev) => ({
             ...prev!,
             connected: true,
@@ -172,14 +175,23 @@ export default function ConnectionStatus({
   }
 
   useEffect(() => {
-    fetchDbInfo(setDbInfo)
+    fetchDbInfo()
   }, [])
+
+  useEffect(() => {
+    if (triggerRef.current) {
+      setMenuWidth(triggerRef.current.offsetWidth)
+    }
+  }, [dbInfo])
 
   return (
     <Dialog open={showConnectDBDialog} onOpenChange={setShowConnectDBDialog}>
       <DropdownMenu>
         <DropdownMenuTrigger asChild>
-          <button className="flex items-center justify-between rounded border px-4 py-2 hover:bg-accent hover:text-accent-foreground">
+          <button
+            className="flex items-center justify-between rounded border px-4 py-2 hover:bg-accent hover:text-accent-foreground"
+            ref={triggerRef}
+          >
             {dbInfo?.connected ? (
               <>
                 <Icon
@@ -208,17 +220,18 @@ export default function ConnectionStatus({
 
         <DropdownMenuContent
           align="start"
+          style={{ width: menuWidth ? `${menuWidth}px` : undefined }}
           className={cn(
-            "min-w-[200px] select-none rounded border border-t-0 bg-popover p-2 shadow",
-            // ❯ animations
-            "data-[state=open]:animate-in data-[state=open]:fade-in " +
+            "select-none rounded border border-t-0 bg-popover p-2 shadow " +
+              // ❯ animations
+              "data-[state=open]:animate-in data-[state=open]:fade-in " +
               "data-[state=open]:slide-in-from-top-1/2 "
           )}
         >
           <DropdownMenuItem
             onSelect={(e) => {
               e.preventDefault()
-              fetchDbInfo(setDbInfo)
+              fetchDbInfo()
             }}
             className="group flex items-center rounded-t border-b px-4 py-2 hover:bg-accent  hover:text-accent-foreground "
           >
@@ -404,12 +417,12 @@ export default function ConnectionStatus({
           <Button
             type="submit"
             className={
-              "min-w-[100px] hover:bg-accent" +
+              "min-w-[100px]" +
               (newDbInfo?.connected
                 ? "  cursor-not-allowed bg-green-600 text-white hover:bg-green-600"
                 : dbConnecting
                   ? " cursor-not-allowed"
-                  : "")
+                  : " hover:bg-accent")
             }
             onClick={() => {
               initiateDbConnection()

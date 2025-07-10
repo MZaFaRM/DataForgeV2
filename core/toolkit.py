@@ -8,6 +8,7 @@ from networkx import Graph
 from functools import wraps
 import json
 from dataclasses import dataclass
+from typing import Any, Optional, Literal
 
 
 class MissingRequiredAttributeError(Exception):
@@ -44,6 +45,15 @@ class DatabaseManager:
         self.port = port
         self.name = name
         self.password = password
+
+    def to_dict(self) -> dict:
+        return {
+            "host": self.host,
+            "user": self.user,
+            "port": self.port,
+            "name": self.name,
+            "connected": self.connected,
+        }
 
     @property
     def url(self) -> str:
@@ -172,11 +182,24 @@ class DatabaseManager:
             graph.add_node(table)
         return graph
 
-    def __json__(self):
+
+class Response:
+    def __init__(
+        self,
+        status: Literal["ok", "error"],
+        payload: Optional[Any] = None,
+        error: Optional[str] = None,
+        traceback: Optional[str] = None,
+    ):
+        self.status = status
+        self.payload = payload
+        self.error = error
+        self.traceback = traceback
+
+    def to_dict(self) -> dict:
         return {
-            "host": self.host,
-            "user": self.user,
-            "port": self.port,
-            "name": self.name,
-            "password": self.password,
+            "status": self.status,
+            "payload": self.payload,
+            "error": self.error,
+            "traceback": self.traceback,
         }

@@ -1,29 +1,19 @@
-import { Icon } from "@iconify/react"
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuSeparator,
-} from "@radix-ui/react-dropdown-menu"
+import ConnectionStatus from "@/dashboard/components/connection-status"
+import { MainNav } from "@/dashboard/components/main-nav"
+import { Overview } from "@/dashboard/components/overview"
+import { RecentSales } from "@/dashboard/components/recent-sales"
+import { Search } from "@/dashboard/components/search"
+import TeamSwitcher from "@/dashboard/components/team-switcher"
+import { UserNav } from "@/dashboard/components/user-nav"
 
-import { Button } from "../components/ui/button"
 import {
   Card,
   CardContent,
   CardDescription,
   CardHeader,
   CardTitle,
-} from "../components/ui/card"
-import { DropdownMenuTrigger } from "../components/ui/dropdown-menu"
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "../components/ui/tabs"
-
-import { CalendarDateRangePicker } from "../dashboard/components/date-range-picker"
-import { MainNav } from "../dashboard/components/main-nav"
-import { Overview } from "../dashboard/components/overview"
-import { RecentSales } from "../dashboard/components/recent-sales"
-import { Search } from "../dashboard/components/search"
-import TeamSwitcher from "../dashboard/components/team-switcher"
-import { UserNav } from "../dashboard/components/user-nav"
+} from "@/components/ui/card"
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 
 export default function DashboardPage() {
   return (
@@ -42,42 +32,7 @@ export default function DashboardPage() {
         <div className="flex-1 space-y-4 p-8 pt-6">
           <div className="flex items-center justify-between space-y-2">
             <h2 className="text-3xl font-bold tracking-tight">DataForge</h2>
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <button className="flex items-center rounded border px-4 py-2">
-                  <Icon
-                    icon="ix:circle-dot"
-                    className="mr-2 h-4 w-4 text-green-500"
-                  />
-                  mulearn
-                  <Icon
-                    icon="mdi:chevron-down"
-                    className="ml-3 h-4 w-4 text-muted-foreground"
-                  />
-                </button>
-              </DropdownMenuTrigger>
-
-              <DropdownMenuContent className="rounded border border-t-0 bg-popover p-2 shadow">
-                <DropdownMenuItem
-                  onSelect={() => alert("Profile")}
-                  className="flex items-center px-4 py-2"
-                >
-                  <Icon icon="mdi:refresh-circle" className="mr-2 h-4 w-4" />
-                  Refresh
-                </DropdownMenuItem>
-                <DropdownMenuItem
-                  onSelect={() => alert("Settings")}
-                  className="flex items-center px-4 py-2"
-                >
-                  <Icon
-                    icon="gridicons:cross-circle"
-                    className="mr-2 h-4 w-4 text-red-500"
-                  />
-                  Terminate
-                </DropdownMenuItem>
-                <DropdownMenuSeparator />
-              </DropdownMenuContent>
-            </DropdownMenu>
+            <ConnectionStatus />
             {/* <div className="flex items-center space-x-2">
               <CalendarDateRangePicker />
               <Button>Download</Button>

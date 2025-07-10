@@ -1,39 +1,39 @@
 {
-	"$schema": "../node_modules/@tauri-apps/cli/config.schema.json",
-	"productName": "dataforge",
-	"version": "0.1.0",
-	"identifier": "com.tauri.dev",
-	"build": {
-		"frontendDist": "../build",
-		"devUrl": "http://localhost:5173",
-		"beforeDevCommand": "pnpm dev",
-		"beforeBuildCommand": "pnpm build"
-	},
-	"app": {
-		"windows": [
-			{
-				"title": "dataforge",
-				"width": 800,
-				"height": 600,
-				"resizable": true,
-				"fullscreen": false
-			}
-		],
-		"security": {
-			"csp": null
-		},
-		"withGlobalTauri": true
-	},
-	"bundle": {
-		"active": true,
-		"targets": "all",
-		"externalBin": ["../sidecar/populator"],
-		"icon": [
-			"icons/32x32.png",
-			"icons/128x128.png",
-			"icons/128x128@2x.png",
-			"icons/icon.icns",
-			"icons/icon.ico"
-		]
-	}
+  "$schema": "../node_modules/@tauri-apps/cli/config.schema.json",
+  "productName": "dataforge",
+  "version": "0.1.0",
+  "identifier": "com.mzafarm.dataforge",
+  "build": {
+    "frontendDist": "../build",
+    "devUrl": "http://localhost:5173",
+    "beforeDevCommand": "pnpm dev",
+    "beforeBuildCommand": "pyinstaller --onefile -n populator-x86_64-unknown-linux-gnu cli.py --distpath sidecar --hidden-import=cryptography && pnpm build"
+  },
+  "app": {
+    "windows": [
+      {
+        "title": "dataforge",
+        "width": 1024,
+        "height": 640,
+        "resizable": true,
+        "fullscreen": false
+      }
+    ],
+    "security": {
+      "csp": null
+    },
+    "withGlobalTauri": true
+  },
+  "bundle": {
+    "active": true,
+    "targets": "all",
+    "externalBin": ["../sidecar/populator"],
+    "icon": [
+      "icons/32x32.png",
+      "icons/128x128.png",
+      "icons/128x128@2x.png",
+      "icons/icon.icns",
+      "icons/icon.ico"
+    ]
+  }
 }

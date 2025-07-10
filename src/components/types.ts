@@ -9,4 +9,14 @@ type Request<T> = Record<string, unknown> & {
   body: T
 }
 
-export type { Response, Request }
+interface DbInfo {
+  host: string
+  user: string
+  port: string
+  name: string
+  connected?: boolean
+  password?: string
+  error?: string
+}
+
+export type { Response, Request, DbInfo }

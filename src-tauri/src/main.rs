@@ -29,6 +29,7 @@ fn send(payload: String, state: State<Shared>) -> Result<String, String> {
 
 fn main() {
     tauri::Builder::default()
+        .plugin(tauri_plugin_opener::init())
         .setup(|app| {
             let exe =
                 std::env::current_exe()?

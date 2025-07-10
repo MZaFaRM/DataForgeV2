@@ -14,6 +14,14 @@ import { Connect } from "vite"
 
 import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog"
 import { DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -25,30 +33,18 @@ import {
   SelectValue,
 } from "@/components/ui/select"
 import { Icons } from "@/components/icons"
-import { Request, Response } from "@/components/types"
+import { DbInfo, Request, Response } from "@/components/types"
 
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "../../components/ui/dialog"
-
-interface DbInfo {
-  host: string
-  user: string
-  port: string
-  name: string
-  connected?: boolean
-  password?: string
-  error?: string
+interface ConnectionStatusProps {
+  dbInfo: DbInfo | null
+  setDbInfo: (info: DbInfo | null) => void
 }
 
-export default function ConnectionStatus() {
+export default function ConnectionStatus({
+  dbInfo,
+  setDbInfo,
+}: ConnectionStatusProps) {
   const [showConnectDBDialog, setShowConnectDBDialog] = useState<boolean>(false)
-  const [dbInfo, setDbInfo] = useState<DbInfo | null>(null)
   const [newDbInfo, setNewDbInfo] = useState<DbInfo | null>(null)
   const [dbConnecting, setDbConnecting] = useState<boolean>(false)
   const [showPassword, setShowPassword] = useState<boolean>(false)
@@ -240,7 +236,7 @@ export default function ConnectionStatus() {
                 ? setShowConnectDBDialog(true)
                 : handleDisconnect()
             }
-            className="group flex items-center rounded-b px-4 py-2 hover:bg-accent hover:text-accent-foreground"
+            className="group flex items-center rounded-b px-4 py-2 hover:bg-muted"
           >
             {dbInfo?.connected ? (
               <>

@@ -143,8 +143,42 @@ class DatabaseManager:
         return self._connected
 
     @requires("inspector")
-    def get_table_names(self):
-        return self._inspector.get_table_names()
+    def get_tables(self) -> dict:
+        tables = self._inspector.get_table_names()
+        table_info = {table: {"parents": 0, "rows": 0} for table in tables}
+
+        for table in table_info:
+            fks = self._inspector.get_foreign_keys(table)
+            table_info[table]["parents"] = len(fks)
+
+            with self.engine.connect() as conn:
+                result = conn.execute(sql_text(f"SELECT COUNT(*) FROM {table}"))
+                table_info[table]["rows"] = result.scalar_one()
+
+        return table_info
+
+    @requires("inspector")
+    def sort_tables(self, tables: list[str] | None = None) -> list[str]:
+        """
+        Sorts the tables based on their foreign key dependencies.
+        """
+
+        graph = self.get_dependency_graph(tables or self._inspector.get_table_names())
+        for src, tgt in graph.edges():
+            score = self.score_edge(src, tgt)
+            graph[src][tgt]["score"] = score
+
+        while True:
+            try:
+                cycles = nx.find_cycle(graph)
+            except nx.NetworkXNoCycle:
+                break
+
+            min_edge = min(cycles, key=lambda edge: graph[edge[0]][edge[1]]["score"])
+            graph.remove_edge(min_edge[0], min_edge[1])
+
+        sorted_tables = list(nx.topological_sort(graph))
+        return sorted_tables
 
     @requires("inspector")
     def get_foreign_keys(self, table_name: str) -> list[ReflectedForeignKeyConstraint]:

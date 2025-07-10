@@ -1,5 +1,6 @@
 import json
 import sys
+import threading
 import traceback
 
 from .toolkit import DatabaseManager, Response
@@ -46,10 +47,26 @@ class BasePopulator:
 
             elif kind == "get_tables":
                 # expects: { kind: "get_tables" }
-                tables = self.db.get_table_names()
+                table_info = {"table_data": {}, "sorted_tables": []}
+                t1 = threading.Thread(
+                    target=lambda: table_info.update(
+                        {"table_data": self.db.get_tables()}
+                    )
+                )
+                t2 = threading.Thread(
+                    target=lambda: table_info.update(
+                        {"sorted_tables": self.db.sort_tables()}
+                    )
+                )
+
+                t1.start()
+                t2.start()
+                t1.join()
+                t2.join()
+
                 return Response(
                     status="ok",
-                    payload=tables,
+                    payload=table_info,
                 ).to_dict()
 
             elif kind == "get_foreign_keys":

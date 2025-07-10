@@ -179,14 +179,14 @@ export default function ConnectionStatus({
     <Dialog open={showConnectDBDialog} onOpenChange={setShowConnectDBDialog}>
       <DropdownMenu>
         <DropdownMenuTrigger asChild>
-          <button className="flex min-w-[200px] items-center justify-between rounded border px-4 py-2 hover:bg-accent hover:text-accent-foreground">
+          <button className="flex items-center justify-between rounded border px-4 py-2 hover:bg-accent hover:text-accent-foreground">
             {dbInfo?.connected ? (
               <>
                 <Icon
                   icon="ix:circle-dot"
                   className="animate-fade-in animate-fade-in mr-2 h-4 w-4 animate-pulse text-green-500"
                 />
-                {dbInfo.name}
+                <p>{dbInfo.name}</p>
               </>
             ) : (
               <>
@@ -197,10 +197,12 @@ export default function ConnectionStatus({
                 {"Not Connected"}
               </>
             )}
-            <Icon
-              icon="mdi:chevron-down"
-              className="ml-auto h-4 w-4 text-muted-foreground"
-            />
+            <div className="ml-auto">
+              <Icon
+                icon="mdi:chevron-down"
+                className="ml-3 h-4 w-4 text-muted-foreground"
+              />
+            </div>
           </button>
         </DropdownMenuTrigger>
 

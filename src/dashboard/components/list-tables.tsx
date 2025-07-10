@@ -167,7 +167,7 @@ export default function ListTables({ dbInfo }: ListTablesProps) {
           })
         ) : (
           <p className="animate-pulse text-center text-sm font-semibold text-muted-foreground">
-            {dbInfo && dbInfo.connected
+            {tableData && tableData.sortedTables.length === 0
               ? "Empty database."
               : "Connect to a database."}
           </p>

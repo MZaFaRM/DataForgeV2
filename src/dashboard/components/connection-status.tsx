@@ -233,7 +233,7 @@ export default function ConnectionStatus({
               e.preventDefault()
               fetchDbInfo()
             }}
-            className="group flex items-center rounded-t border-b px-4 py-2 hover:bg-accent  hover:text-accent-foreground "
+            className="group flex items-center rounded-t border-b px-4 py-2 hover:bg-accent  hover:text-accent-foreground overflow-hidden"
           >
             {dbConnecting ? (
               <Icons.spinner className="mr-2 h-4 w-4 animate-spin" />
@@ -417,12 +417,12 @@ export default function ConnectionStatus({
           <Button
             type="submit"
             className={
-              "min-w-[100px]" +
+              "min-w-[100px] " +
               (newDbInfo?.connected
-                ? "  cursor-not-allowed bg-green-600 text-white hover:bg-green-600"
+                ? " cursor-not-allowed bg-green-600 text-white hover:bg-green-600"
                 : dbConnecting
-                  ? " cursor-not-allowed"
-                  : " hover:bg-accent")
+                  ? "cursor-not-allowed"
+                  : "hover:bg-accent")
             }
             onClick={() => {
               initiateDbConnection()

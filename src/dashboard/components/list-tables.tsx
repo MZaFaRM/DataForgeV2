@@ -82,7 +82,6 @@ export default function ListTables({
   setActiveTable,
 }: ListTablesProps) {
   const [tableData, setTableData] = useState<TableInfo | null>(null)
-
   const [availableHeight, setAvailableHeight] = useState("")
   const ref = useRef<HTMLDivElement>(null)
 
@@ -99,6 +98,14 @@ export default function ListTables({
     window.addEventListener("resize", updateHeight)
     return () => window.removeEventListener("resize", updateHeight)
   }, [])
+
+  useEffect(() => {
+    if (!dbInfo) {
+      console.log("dbInfo changed:", dbInfo)
+      setTableData(null)
+      setActiveTable(null)
+    }
+  }, [dbInfo])
 
   function fetchTables() {
     if (!dbInfo || !dbInfo.connected) {
@@ -161,7 +168,7 @@ export default function ListTables({
                 rows={entry.rows || 1999}
                 inserted={false}
                 active={tableName === activeTable}
-                onClick ={() => {
+                onClick={() => {
                   setActiveTable(tableName)
                 }}
               />

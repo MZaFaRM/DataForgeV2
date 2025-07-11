@@ -1,8 +1,8 @@
 import { useEffect, useRef, useState } from "react"
+import { invokeGetTables } from "@/api/db"
 import { Icon } from "@iconify/react"
-import { invoke } from "@tauri-apps/api/core"
 
-import { DbInfo, Response } from "@/components/types"
+import { DbData } from "@/components/types"
 
 interface TableCardProps {
   name: string
@@ -71,13 +71,13 @@ interface TableInfo {
   tableData: Record<string, TableEntry>
 }
 interface ListTablesProps {
-  dbInfo: DbInfo | null
+  dbData: DbData | null
   activeTable: string | null
   setActiveTable: (activeTable: string | null) => void
 }
 
 export default function ListTables({
-  dbInfo,
+  dbData,
   activeTable,
   setActiveTable,
 }: ListTablesProps) {
@@ -100,48 +100,37 @@ export default function ListTables({
   }, [])
 
   useEffect(() => {
-    if (!dbInfo) {
-      console.log("dbInfo changed:", dbInfo)
+    if (!dbData) {
+      console.log("dbData changed:", dbData)
       setTableData(null)
       setActiveTable(null)
     }
-  }, [dbInfo])
+  }, [dbData])
 
   function fetchTables() {
-    if (!dbInfo || !dbInfo.connected) {
+    if (!dbData || !dbData.connected) {
       setTableData(null)
       return
     }
 
-    invoke<string>("send", {
-      payload: JSON.stringify({
-        kind: "get_tables",
-      }),
-    })
-      .then((unParsedResponse: string) => {
-        const res = JSON.parse(unParsedResponse) as Response<any>
-        if (res.status === "ok") {
-          console.log("Tables fetched successfully:")
-          setTableData(() => {
-            const raw = res.payload
-            const formatted: TableInfo = {
-              sortedTables: raw.sorted_tables,
-              tableData: raw.table_data,
-            }
-            return formatted
-          })
-        } else {
-          console.error("Error fetching tables:", res.error)
-        }
+    invokeGetTables()
+      .then((res: any) => {
+        setTableData(() => {
+          const formatted: TableInfo = {
+            sortedTables: res.sorted_tables,
+            tableData: res.table_data,
+          }
+          return formatted
+        })
       })
       .catch((error) => {
-        console.error("Error invoking get_tables:", error)
+        console.error("Error fetching tables:", error)
       })
   }
 
   useEffect(() => {
     fetchTables()
-  }, [dbInfo])
+  }, [dbData])
 
   return (
     <div
@@ -155,7 +144,7 @@ export default function ListTables({
           Total: {tableData?.sortedTables.length || 0}, filled: 20
         </p>
       </div>
-      <div className="mt-4 flex-1 space-y-4 overflow-y-auto">
+      <div className="mt-4 flex-1 space-y-4 overflow-y-auto ">
         {tableData && tableData.sortedTables.length !== 0 ? (
           tableData.sortedTables.map((tableName) => {
             const entry = tableData?.tableData[tableName] as TableEntry

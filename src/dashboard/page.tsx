@@ -18,10 +18,10 @@ import {
   CardTitle,
 } from "@/components/ui/card"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { DbInfo } from "@/components/types"
+import { DbData } from "@/components/types"
 
 export default function DashboardPage() {
-  const [dbInfo, setDbInfo] = useState<DbInfo | null>(null)
+  const [dbData, setDbInfo] = useState<DbData | null>(null)
   const [activeTable, setActiveTable] = useState<string | null>(null)
 
   return (
@@ -57,15 +57,15 @@ export default function DashboardPage() {
                 would mean a lot.
               </p>
             </div>
-            <ConnectionStatus dbInfo={dbInfo} setDbInfo={setDbInfo} />
+            <ConnectionStatus dbData={dbData} setDbInfo={setDbInfo} />
           </div>
           <div className="flex flex-row space-y-4">
             <ListTables
-              dbInfo={dbInfo}
+              dbData={dbData}
               setActiveTable={setActiveTable}
               activeTable={activeTable}
             />
-            <InsertionPanel dbInfo={dbInfo} activeTable={activeTable} />
+            <InsertionPanel dbData={dbData} activeTable={activeTable} />
           </div>
         </div>
       </div>

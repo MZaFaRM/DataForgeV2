@@ -1,3 +1,4 @@
+from collections.abc import Sequence
 import os
 from sqlalchemy.engine import Engine, Inspector
 from sqlalchemy import create_engine
@@ -9,6 +10,10 @@ from functools import wraps
 import json
 from dataclasses import dataclass
 from typing import Any, Optional, Literal
+
+from typing import Dict, List, Any
+from sqlalchemy.engine.reflection import Inspector
+from sqlalchemy.sql.schema import Column
 
 
 class MissingRequiredAttributeError(Exception):
@@ -143,6 +148,13 @@ class DatabaseManager:
         return self._connected
 
     @requires("inspector")
+    def get_columns(self, table_name: str) -> list:
+        """
+        Returns the columns of a table.
+        """
+        return self._inspector.get_columns(table_name)
+
+    @requires("inspector")
     def get_tables(self) -> dict:
         tables = self._inspector.get_table_names()
         table_info = {table: {"parents": 0, "rows": 0} for table in tables}
@@ -181,10 +193,6 @@ class DatabaseManager:
         return sorted_tables
 
     @requires("inspector")
-    def get_foreign_keys(self, table_name: str) -> list[ReflectedForeignKeyConstraint]:
-        return self._inspector.get_foreign_keys(table_name)
-
-    @requires("inspector")
     def score_edge(self, source: str, target: str) -> int | float:
         fks = self._inspector.get_foreign_keys(target)
         columns = self._inspector.get_columns(target)
@@ -209,12 +217,88 @@ class DatabaseManager:
     def get_dependency_graph(self, tables: list[str]) -> Graph:
         graph = nx.DiGraph()
         for table in tables:
-            for fk in self.get_foreign_keys(table):
+            for fk in self.inspector.get_foreign_keys(table):
                 referred = fk.get("referred_table")
                 if referred and referred in tables:
                     graph.add_edge(referred, table)
             graph.add_node(table)
         return graph
+
+    @requires("inspector")
+    def get_table_metadata(self, table_name: str) -> dict[str, Any]:
+        if table_name not in self.inspector.get_table_names():
+            raise ValueError(f"Table '{table_name}' does not exist in the database.")
+
+        fk_map = self.get_foreign_keys(table_name)
+        pk = self.inspector.get_pk_constraint(table_name).get("constrained_columns", [])
+        cols = self.inspector.get_columns(table_name)
+
+        meta: dict[str, Any] = {}
+        meta["uniques"] = self.get_unique_columns(table_name)
+        meta["parents"] = [t["table"] for fk in fk_map.values() for t in fk]
+
+        def handle_default(default_val):
+            if default_val is None:
+                return None
+
+            # SQLAlchemy packs server-side defaults in its own objects
+            if hasattr(default_val, "arg"):
+                return str(default_val.arg)
+            return default_val
+
+        columns = {}
+        for col in cols:
+            name = col["name"]
+            dtype = col["type"]
+
+            columns[name] = {
+                "type": str(dtype),
+                "primary_key": name in pk,
+                "nullable": col.get("nullable", True),
+                "default": handle_default(col.get("default")),
+                "autoincrement": bool(col.get("autoincrement")),
+                "computed": bool(col.get("computed")),
+                "foreign_keys": fk_map.get(name, []),
+                "length": (
+                    getattr(dtype, "length", None) or getattr(dtype, "precision", None)
+                ),
+            }
+        meta["columns"] = columns
+        return meta
+
+    @requires("inspector")
+    def get_unique_columns(self, table: str) -> list[tuple[str, ...]]:
+        """Return UNIQUE constraints — each as a tuple of column names (sorted)."""
+        unique_cols = set()
+
+        def add_unique(cols: Sequence[str | None] | None):
+            if cols:
+                unique_cols.add(tuple(sorted(c for c in cols if c is not None)))
+
+        for uc in self.inspector.get_unique_constraints(table):
+            add_unique(uc.get("column_names"))
+
+        for idx in self.inspector.get_indexes(table):
+            if idx.get("unique"):
+                add_unique(idx.get("column_names"))
+
+        pk = self.inspector.get_pk_constraint(table).get("constrained_columns", [])
+        add_unique(pk)
+
+        return sorted(unique_cols)
+
+    @requires("inspector")
+    def get_foreign_keys(self, table: str) -> dict[str, List[dict[str, str]]]:
+        fk_map: dict[str, List[dict[str, str]]] = {}
+
+        for fk in self.inspector.get_foreign_keys(table):
+            ref_tbl = fk.get("referred_table")
+            ref_cols = fk.get("referred_columns", [])
+            local_cols = fk.get("constrained_columns", [])
+
+            for src, dest in zip(local_cols, ref_cols):
+                fk_map.setdefault(src, []).append({"table": ref_tbl, "column": dest})
+        return fk_map
 
 
 class Response:

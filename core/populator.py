@@ -15,7 +15,7 @@ class BasePopulator:
             kind = command.get("kind")
 
             if kind == "connect":
-                # expects: { kind: "connect", creds: {...} }
+                # expects: { kind: "connect", body: {...} }
                 creds = command.get("body", {})
                 required_keys = ["host", "user", "port", "name", "password"]
                 missing = []
@@ -39,6 +39,7 @@ class BasePopulator:
                 self.db.test_connection()
 
                 return Response(status="ok", payload=self.db.to_dict()).to_dict()
+
             elif kind == "disconnect":
                 self.db = DatabaseManager()
                 return Response(
@@ -69,17 +70,29 @@ class BasePopulator:
                     payload=table_info,
                 ).to_dict()
 
-            elif kind == "get_foreign_keys":
-                # expects: { kind: "get_foreign_keys", table: "users" }
+            elif kind == "get_table_metadata":
+                # expects: { kind: "get_table_metadata", body: "users" }
                 table = command.get("body", "")
-                fks = self.db.get_foreign_keys(table)
+                if not table:
+                    return Response(
+                        status="error",
+                        error="Table name is required.",
+                    ).to_dict()
+
+                metadata = self.db.get_table_metadata(table)
+                if not metadata:
+                    return Response(
+                        status="error",
+                        error=f"No metadata found for table '{table}'.",
+                    ).to_dict()
+
                 return Response(
                     status="ok",
-                    payload=fks,
+                    payload=metadata,
                 ).to_dict()
 
             elif kind == "get_graph":
-                # expects: { kind: "get_graph", tables: [...] }
+                # expects: { kind: "get_graph", body: [...] }
                 tables = command.get("body", [])
                 graph = self.db.get_dependency_graph(tables)
                 return Response(

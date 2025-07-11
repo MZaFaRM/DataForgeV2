@@ -1,15 +1,15 @@
-type Response<T> = Record<string, unknown> & {
+type CliResponse<T> = Record<string, unknown> & {
   status: "ok" | "error"
   payload?: T
   error?: string
 }
 
-type Request<T> = Record<string, unknown> & {
+type CliRequest<T> = Record<string, unknown> & {
   kind: string
-  body: T
+  body?: T
 }
 
-interface DbInfo {
+interface DbData {
   host: string
   user: string
   port: string
@@ -19,4 +19,22 @@ interface DbInfo {
   error?: string
 }
 
-export type { Response, Request, DbInfo }
+interface TableData {
+  uniques: string[][]
+  parents: string[]
+  columns: Record<
+    string,
+    {
+      type: string
+      primaryKey: boolean
+      nullable: boolean
+      default: string | null
+      autoincrement: boolean
+      computed: boolean
+      foreignKeys: { table: string; column: string }[]
+      length: number | null
+    }
+  >
+}
+
+export type { CliResponse, CliRequest, DbData, TableData }

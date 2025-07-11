@@ -1,17 +1,16 @@
-import { get } from "http"
-import { useEffect, useRef, useState } from "react"
+import { invokeTableData } from "@/api/db"
 import { Icon } from "@iconify/react"
-import { set } from "date-fns"
+import { useEffect, useRef, useState } from "react"
 
-import { DbInfo } from "@/components/types"
+import { DbData, TableData } from "@/components/types"
 
 interface ListTablesProps {
-  dbInfo: DbInfo | null
+  dbData: DbData | null
   activeTable: string | null
 }
 
 export default function InsertionPanel({
-  dbInfo,
+  dbData,
   activeTable,
 }: ListTablesProps) {
   const ref = useRef<HTMLDivElement>(null)
@@ -20,6 +19,7 @@ export default function InsertionPanel({
   const [timeOfDay, setTimeOfDay] = useState<
     "sunrise" | "sunset" | "moonrise" | "moonset"
   >("sunrise")
+  const [tableData, setTableData] = useState<TableData | null>(null)
 
   useEffect(() => {
     getTimeOfDay()
@@ -29,6 +29,7 @@ export default function InsertionPanel({
 
         const spaceBelow = window.innerHeight - rect.top
         setAvailableHeight(spaceBelow - 40 + "px")
+        console.log("Available height:", spaceBelow - 40 + "px")
 
         const spaceRight = window.innerWidth - rect.left
         setAvailableWidth(spaceRight - 40 + "px")
@@ -39,6 +40,10 @@ export default function InsertionPanel({
     window.addEventListener("resize", updateSize)
     return () => window.removeEventListener("resize", updateSize)
   }, [])
+
+  useEffect(() => {
+    getTableData()
+  }, [activeTable])
 
   function getTimeOfDay() {
     const hour = new Date().getHours()
@@ -51,8 +56,30 @@ export default function InsertionPanel({
     })
   }
 
+  function getTableData() {
+    if (!dbData || !dbData.connected || !activeTable) {
+      setTableData(null)
+      return
+    }
+    invokeTableData(activeTable)
+      .then((res: TableData) => {
+        setTableData(res as TableData)
+      })
+      .catch((error) => {
+        console.error("Error fetching table data:", error)
+        setTableData(null)
+      })
+  }
+
   return (
-    <div>
+    <div
+      ref={ref}
+      className="flex flex-col"
+      style={{
+        height: availableHeight,
+        width: availableWidth,
+      }}
+    >
       <div>
         {!activeTable ? (
           <>
@@ -65,32 +92,32 @@ export default function InsertionPanel({
                 />
               ))}
             </div>
-            <p className="mb-4 text-muted-foreground">
+            <p className="mb-4 text-sm font-medium text-muted-foreground">
               Select a table to continue.
             </p>
           </>
         ) : (
           <>
-            <h2 className="mb-4 text-2xl font-semibold tracking-wide">
-              {activeTable}
-            </h2>
+            <div className="mb-4 flex items-center space-x-2">
+              <h2 className="text-2xl font-semibold tracking-wide">
+                {activeTable}
+              </h2>
+              <Icon
+                key={activeTable}
+                icon="meteocons:smoke-particles"
+                className="h-8 w-8 text-muted-foreground"
+              />
+            </div>
             <p className="mb-4 text-muted-foreground">
               Yaay! You've selected a table
             </p>
           </>
         )}
       </div>
-      <div
-        ref={ref}
-        className="flex w-full flex-col space-y-4 rounded-lg border p-4"
-        style={{
-          height: availableHeight,
-          width: availableWidth,
-        }}
-      >
+      <div className="flex h-full w-full flex-col space-y-4 rounded border p-4">
         <div className="flex h-full w-full items-center justify-center">
           <Icon
-            icon={`meteocons:${timeOfDay}-fill`}
+            icon={`meteocons:${timeOfDay}`}
             className="margin-auto h-16 w-16 text-muted-foreground"
           />
         </div>

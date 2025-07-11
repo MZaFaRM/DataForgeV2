@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react"
+import { invokeDbConnection, invokeDbDisconnect, invokeDbInfo } from "@/api/db"
 import { Icon } from "@iconify/react"
 import {
   DropdownMenu,
@@ -6,13 +6,11 @@ import {
   DropdownMenuItem,
   DropdownMenuSeparator,
 } from "@radix-ui/react-dropdown-menu"
-import { event } from "@tauri-apps/api"
-import { invoke } from "@tauri-apps/api/core"
-import { set } from "date-fns"
 import { Eye, EyeOff } from "lucide-react"
-import { Connect } from "vite"
+import { useEffect, useRef, useState } from "react"
 
-import { cn } from "@/lib/utils"
+import { Icons } from "@/components/icons"
+import { DbData } from "@/components/types"
 import { Button } from "@/components/ui/button"
 import {
   Dialog,
@@ -25,27 +23,19 @@ import {
 import { DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select"
-import { Icons } from "@/components/icons"
-import { DbInfo, Request, Response } from "@/components/types"
+import { cn } from "@/lib/utils"
 
 interface ConnectionStatusProps {
-  dbInfo: DbInfo | null
-  setDbInfo: (info: DbInfo | null) => void
+  dbData: DbData | null
+  setDbInfo: (info: DbData | null) => void
 }
 
 export default function ConnectionStatus({
-  dbInfo,
+  dbData,
   setDbInfo,
 }: ConnectionStatusProps) {
   const [showConnectDBDialog, setShowConnectDBDialog] = useState<boolean>(false)
-  const [newDbInfo, setNewDbInfo] = useState<DbInfo | null>(null)
+  const [newDbInfo, setNewDbInfo] = useState<DbData | null>(null)
   const [dbConnecting, setDbConnecting] = useState<boolean>(false)
   const [showPassword, setShowPassword] = useState<boolean>(false)
   const [errorField, setErrorField] = useState<string | null>(null)
@@ -56,48 +46,34 @@ export default function ConnectionStatus({
   function fetchDbInfo() {
     console.log("Fetching DB info...")
     setDbConnecting(true)
-    setTimeout(() => {
-      setDbConnecting(false)
-    }, 1000)
-    invoke<string>("send", {
-      payload: JSON.stringify({
-        kind: "get_info",
-      }),
+
+    const start = Date.now()
+
+    invokeDbInfo().then((payload) => {
+      setDbInfo(payload)
+
+      const elapsed = Date.now() - start
+      const remaining = Math.max(1000 - elapsed, 0) // how much longer to spin
+
+      setTimeout(() => {
+        setDbConnecting(false)
+      }, remaining)
     })
-      .then((unParsedResponse) => {
-        const res = JSON.parse(unParsedResponse || "{}") as Response<DbInfo>
-        if (res.status === "ok" && res.payload) {
-          setDbInfo(res.payload)
-        } else {
-          console.error("Backend error:", res.error)
-        }
-      })
-      .catch((error) => {
-        console.error("Fetch error:", error)
-      })
   }
 
   function initiateDbConnection() {
     console.log("Initiating DB connection...")
     setDbConnecting(true)
 
-    const request: Request<DbInfo> = {
-      kind: "connect",
-      body: {
-        host: newDbInfo?.host || "localhost",
-        port: newDbInfo?.port || "3306",
-        user: newDbInfo?.user ?? "root",
-        name: newDbInfo?.name ?? "",
-        password: newDbInfo?.password ?? "",
-      },
-    }
-
-    invoke<string>("send", {
-      payload: JSON.stringify(request),
+    invokeDbConnection({
+      host: newDbInfo?.host || "localhost",
+      port: newDbInfo?.port || "3306",
+      user: newDbInfo?.user ?? "root",
+      name: newDbInfo?.name ?? "",
+      password: newDbInfo?.password ?? "",
     })
-      .then((unParsedResponse) => {
-        const res = JSON.parse(unParsedResponse || "{}") as Response<boolean>
-        if (res.status === "ok") {
+      .then((success) => {
+        if (success) {
           fetchDbInfo()
           setNewDbInfo((prev) => ({
             ...prev!,
@@ -109,7 +85,7 @@ export default function ConnectionStatus({
             setShowConnectDBDialog(false)
           }, 1000)
         } else {
-          throw new Error(res.error || "Unknown error")
+          throw new Error("Connection failed")
         }
       })
       .catch((error) => {
@@ -125,27 +101,20 @@ export default function ConnectionStatus({
             error: "",
           }))
         }, 3000)
+
         console.error("Connection error:", error)
       })
-
-    setDbConnecting(false)
+      .finally(() => {
+        setDbConnecting(false)
+      })
   }
 
   function handleDisconnect() {
     console.log("Disconnecting from DB...")
-    invoke<string>("send", {
-      payload: JSON.stringify({
-        kind: "disconnect",
-      }),
-    })
-      .then((unParsedResponse) => {
-        const res = JSON.parse(unParsedResponse || "{}") as Response<string>
-        if (res.status === "ok") {
-          setDbInfo(null)
-          setShowConnectDBDialog(false)
-        } else {
-          console.error("Disconnection error:", res.error)
-        }
+    invokeDbDisconnect()
+      .then(() => {
+        setDbInfo(null)
+        setShowConnectDBDialog(false)
       })
       .catch((error) => {
         console.error("Disconnection error:", error)
@@ -176,13 +145,19 @@ export default function ConnectionStatus({
 
   useEffect(() => {
     fetchDbInfo()
+
+    setTimeout(() => {
+      if (triggerRef.current) {
+        setMenuWidth(triggerRef.current.offsetWidth)
+      }
+    }, 1000)
   }, [])
 
   useEffect(() => {
     if (triggerRef.current) {
       setMenuWidth(triggerRef.current.offsetWidth)
     }
-  }, [dbInfo])
+  }, [dbData])
 
   return (
     <Dialog open={showConnectDBDialog} onOpenChange={setShowConnectDBDialog}>
@@ -192,13 +167,13 @@ export default function ConnectionStatus({
             className="flex items-center justify-between rounded border px-4 py-2 hover:bg-accent hover:text-accent-foreground"
             ref={triggerRef}
           >
-            {dbInfo?.connected ? (
+            {dbData?.connected ? (
               <>
                 <Icon
                   icon="ix:circle-dot"
                   className="animate-fade-in animate-fade-in mr-2 h-4 w-4 animate-pulse text-green-500"
                 />
-                <p>{dbInfo.name}</p>
+                <p>{dbData.name}</p>
               </>
             ) : (
               <>
@@ -233,7 +208,7 @@ export default function ConnectionStatus({
               e.preventDefault()
               fetchDbInfo()
             }}
-            className="group flex items-center rounded-t border-b px-4 py-2 hover:bg-accent  hover:text-accent-foreground overflow-hidden"
+            className="group flex items-center overflow-hidden rounded-t border-b px-4 py-2  hover:bg-accent hover:text-accent-foreground"
           >
             {dbConnecting ? (
               <Icons.spinner className="mr-2 h-4 w-4 animate-spin" />
@@ -247,13 +222,13 @@ export default function ConnectionStatus({
           </DropdownMenuItem>
           <DropdownMenuItem
             onSelect={() =>
-              !dbInfo?.connected
+              !dbData?.connected
                 ? setShowConnectDBDialog(true)
                 : handleDisconnect()
             }
             className="group flex items-center rounded-b px-4 py-2 hover:bg-muted"
           >
-            {dbInfo?.connected ? (
+            {dbData?.connected ? (
               <>
                 <Icon
                   icon="ri:indeterminate-circle-fill"

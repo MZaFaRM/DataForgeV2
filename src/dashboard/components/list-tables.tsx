@@ -1,8 +1,9 @@
-import { useEffect, useRef, useState } from "react"
+import { forwardRef, useEffect, useMemo, useRef, useState } from "react"
 import { invokeGetTables } from "@/api/db"
 import { Icon } from "@iconify/react"
 
-import { DbData } from "@/components/types"
+import { Input } from "@/components/ui/input"
+import { DbData, TableEntry } from "@/components/types"
 
 interface TableCardProps {
   name: string
@@ -14,62 +15,54 @@ interface TableCardProps {
   onClick: () => void
 }
 
-function TableCard({
-  name,
-  parents,
-  rowsInserted,
-  rows,
-  inserted,
-  active,
-  onClick,
-}: TableCardProps) {
-  return (
-    <div
-      className={
-        "flex w-full items-center rounded border p-4 hover:bg-accent hover:text-accent-foreground" +
-        (active ? " bg-accent text-accent-foreground" : "")
-      }
-      onClick={onClick}
-      role="button"
-    >
-      {inserted ? (
-        <Icon
-          icon="material-symbols:check-circle-rounded"
-          className="mr-4 h-6 w-6 text-green-500"
-        />
-      ) : (
-        <Icon icon="mdi:minus-circle" className="text-grey-500 mr-4 h-6 w-6" />
-      )}
-      <div>
-        <div className="flex w-40 items-center">
-          <h3 className="truncate font-semibold tracking-wider">{name}</h3>
-          {inserted && (
-            <p className="ml-2 text-sm font-bold text-green-500">
-              +{rowsInserted}
-            </p>
-          )}
+const TableCard = forwardRef<HTMLDivElement, TableCardProps>(
+  ({ name, parents, rowsInserted, rows, inserted, active, onClick }, ref) => {
+    return (
+      <div
+        ref={ref}
+        className={
+          "flex w-full items-center rounded border p-4 hover:bg-accent hover:text-accent-foreground" +
+          (active ? " bg-accent text-accent-foreground" : "")
+        }
+        onClick={onClick}
+        role="button"
+      >
+        {inserted ? (
+          <Icon
+            icon="material-symbols:check-circle-rounded"
+            className="mr-4 h-6 w-6 text-green-500"
+          />
+        ) : (
+          <Icon
+            icon="mdi:minus-circle"
+            className="text-grey-500 mr-4 h-6 w-6"
+          />
+        )}
+        <div>
+          <div className="flex w-40 items-center">
+            <h3 className="truncate font-semibold tracking-wider">{name}</h3>
+            {inserted && (
+              <p className="ml-2 text-sm font-bold text-green-500">
+                +{rowsInserted}
+              </p>
+            )}
+          </div>
+          <p className="text-sm text-muted-foreground">
+            {parents} parent tables
+          </p>
         </div>
-        <p className="text-sm text-muted-foreground">{parents} parent tables</p>
+        <p className="ml-auto text-sm font-semibold text-muted-foreground">
+          {rows !== 1
+            ? new Intl.NumberFormat("en", { notation: "compact" }).format(
+                rows
+              ) + " rows"
+            : "1 row"}
+        </p>
       </div>
-      <p className="ml-auto text-sm font-semibold text-muted-foreground">
-        {rows !== 1
-          ? new Intl.NumberFormat("en", { notation: "compact" }).format(rows) +
-            " rows"
-          : "1 row"}
-      </p>
-    </div>
-  )
-}
+    )
+  }
+)
 
-interface TableEntry {
-  parents: number
-  rows: number
-}
-
-interface TableInfo {
-  sortedTables: string[]
-  tableData: Record<string, TableEntry>
-}
 interface ListTablesProps {
   dbData: DbData | null
   activeTable: string | null
@@ -81,9 +74,13 @@ export default function ListTables({
   activeTable,
   setActiveTable,
 }: ListTablesProps) {
-  const [tableData, setTableData] = useState<TableInfo | null>(null)
+  const [tableEntries, setTableEntries] = useState<TableEntry[] | null>(null)
   const [availableHeight, setAvailableHeight] = useState("")
+  const [search, setSearch] = useState("")
+
   const ref = useRef<HTMLDivElement>(null)
+  const activeTableRef = useRef<HTMLDivElement>(null)
+  const scrollContainerRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
     function updateHeight() {
@@ -102,26 +99,21 @@ export default function ListTables({
   useEffect(() => {
     if (!dbData) {
       console.log("dbData changed:", dbData)
-      setTableData(null)
+      setTableEntries(null)
       setActiveTable(null)
     }
   }, [dbData])
 
   function fetchTables() {
     if (!dbData || !dbData.connected) {
-      setTableData(null)
+      setTableEntries(null)
       return
     }
 
     invokeGetTables()
-      .then((res: any) => {
-        setTableData(() => {
-          const formatted: TableInfo = {
-            sortedTables: res.sorted_tables,
-            tableData: res.table_data,
-          }
-          return formatted
-        })
+      .then((res) => {
+        setTableEntries(res)
+        console.log("Tables fetched:", res)
       })
       .catch((error) => {
         console.error("Error fetching tables:", error)
@@ -129,8 +121,30 @@ export default function ListTables({
   }
 
   useEffect(() => {
+    if (activeTableRef.current) {
+      activeTableRef.current.scrollIntoView({
+        behavior: "smooth",
+        block: "center",
+      })
+    }
+  }, [activeTable])
+
+  useEffect(() => {
+    setActiveTable(tableEntries?.[0]["name"] || null)
+  }, [tableEntries])
+
+  useEffect(() => {
     fetchTables()
   }, [dbData])
+
+  const filteredEntries = useMemo(() => {
+    if (scrollContainerRef.current) {
+      scrollContainerRef.current.scrollTop = 0
+    }
+    return tableEntries?.filter((entry) =>
+      entry.name.toLowerCase().includes(search.toLowerCase())
+    )
+  }, [tableEntries, search])
 
   return (
     <div
@@ -141,33 +155,38 @@ export default function ListTables({
       <div className="flex h-10 w-full flex-shrink-0 items-center justify-between">
         <h2 className="text-2xl font-semibold">Tables</h2>
         <p className="text-sm font-semibold text-muted-foreground">
-          Total: {tableData?.sortedTables.length || 0}, filled: 20
+          Total: {tableEntries?.length || 0}, filled: 20
         </p>
       </div>
-      <div className="mt-4 flex-1 space-y-4 overflow-y-auto ">
-        {tableData && tableData.sortedTables.length !== 0 ? (
-          tableData.sortedTables.map((tableName) => {
-            const entry = tableData?.tableData[tableName] as TableEntry
-            return (
-              <TableCard
-                key={tableName}
-                name={tableName}
-                parents={entry.parents}
-                rowsInserted={0}
-                rows={entry.rows || 1999}
-                inserted={false}
-                active={tableName === activeTable}
-                onClick={() => {
-                  setActiveTable(tableName)
-                }}
-              />
-            )
-          })
+
+      <Input
+        className="mt-4"
+        placeholder="Search tables..."
+        value={search}
+        onChange={(e) => setSearch(e.target.value)}
+      />
+
+      <div
+        className="mt-4 flex-1 space-y-4 overflow-y-auto"
+        ref={scrollContainerRef}
+      >
+        {filteredEntries && filteredEntries.length !== 0 ? (
+          filteredEntries.map((tableEntry) => (
+            <TableCard
+              key={tableEntry.name}
+              name={tableEntry.name}
+              ref={tableEntry.name === activeTable ? activeTableRef : undefined}
+              parents={tableEntry.parents}
+              rowsInserted={0}
+              rows={tableEntry.rows || 1999}
+              inserted={false}
+              active={tableEntry.name === activeTable}
+              onClick={() => setActiveTable(tableEntry.name)}
+            />
+          ))
         ) : (
           <p className="animate-pulse text-center text-sm font-semibold text-muted-foreground">
-            {tableData && tableData.sortedTables.length === 0
-              ? "Empty database."
-              : "Connect to a database."}
+            No matching tables.
           </p>
         )}
       </div>

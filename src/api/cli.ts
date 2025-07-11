@@ -1,4 +1,5 @@
 import { invoke } from "@tauri-apps/api/core"
+import camelcaseKeys from "camelcase-keys"
 import { clsx, type ClassValue } from "clsx"
 import { twMerge } from "tailwind-merge"
 
@@ -21,7 +22,7 @@ export async function invokeAndExtract<T = unknown, R = unknown>(
     const res = JSON.parse(raw || "{}") as CliResponse<R>
 
     if (res.status === "ok" && res.payload) {
-      return res.payload
+      return camelcaseKeys(res.payload, { deep: true }) as R
     } else {
       throw new Error(res.error || "Unknown error")
     }

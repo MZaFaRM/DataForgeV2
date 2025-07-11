@@ -13,8 +13,8 @@
     "windows": [
       {
         "title": "dataforge",
-        "width": 1024,
-        "height": 640,
+        "width": 1280,
+        "height": 720,
         "resizable": true,
         "fullscreen": false
       }

@@ -3,12 +3,13 @@ import sys
 import threading
 import traceback
 
-from .toolkit import DatabaseManager, Response
+from .toolkit import DatabaseManager, Populator, Response
 
 
-class BasePopulator:
+class Runner:
     def __init__(self):
         self.db = DatabaseManager()
+        self.populator = Populator()
 
     def handle_command(self, command: dict) -> dict:
         try:
@@ -65,9 +66,19 @@ class BasePopulator:
                 t1.join()
                 t2.join()
 
+                sorted_tables = table_info["sorted_tables"]
+                table_data = table_info["table_data"]
+
                 return Response(
                     status="ok",
-                    payload=table_info,
+                    payload=[
+                        {
+                            "name": table,
+                            "rows": table_data[table]["rows"],
+                            "parents": table_data[table]["parents"],
+                        }
+                        for table in sorted_tables
+                    ],
                 ).to_dict()
 
             elif kind == "get_table_metadata":
@@ -91,17 +102,6 @@ class BasePopulator:
                     payload=metadata,
                 ).to_dict()
 
-            elif kind == "get_graph":
-                # expects: { kind: "get_graph", body: [...] }
-                tables = command.get("body", [])
-                graph = self.db.get_dependency_graph(tables)
-                return Response(
-                    status="ok",
-                    payload={
-                        "edges": list(graph.edges()),
-                    },
-                ).to_dict()
-
             elif kind == "ping":
                 return Response(
                     status="ok",
@@ -112,6 +112,13 @@ class BasePopulator:
                 return Response(
                     status="ok",
                     payload=self.db.to_dict(),
+                ).to_dict()
+            elif kind == "faker_methods":
+                # expects: { kind: "faker_methods" }
+                methods = self.populator.methods
+                return Response(
+                    status="ok",
+                    payload=methods,
                 ).to_dict()
 
             else:

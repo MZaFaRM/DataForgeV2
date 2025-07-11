@@ -1,5 +1,7 @@
 from collections.abc import Sequence
+import contextlib
 import os
+from faker import Faker
 from sqlalchemy.engine import Engine, Inspector
 from sqlalchemy import create_engine
 from sqlalchemy import text as sql_text
@@ -160,8 +162,9 @@ class DatabaseManager:
         table_info = {table: {"parents": 0, "rows": 0} for table in tables}
 
         for table in table_info:
-            fks = self._inspector.get_foreign_keys(table)
-            table_info[table]["parents"] = len(fks)
+            fks = self.inspector.get_foreign_keys(table)
+            parents = {fk["referred_table"] for fk in fks if fk.get("referred_table")}
+            table_info[table]["parents"] = len(parents)
 
             with self.engine.connect() as conn:
                 result = conn.execute(sql_text(f"SELECT COUNT(*) FROM {table}"))
@@ -235,7 +238,7 @@ class DatabaseManager:
 
         meta: dict[str, Any] = {}
         meta["uniques"] = self.get_unique_columns(table_name)
-        meta["parents"] = [t["table"] for fk in fk_map.values() for t in fk]
+        meta["parents"] = list(set(t["table"] for t in fk_map.values()))
 
         def handle_default(default_val):
             if default_val is None:
@@ -246,23 +249,27 @@ class DatabaseManager:
                 return str(default_val.arg)
             return default_val
 
-        columns = {}
+        columns = []
         for col in cols:
             name = col["name"]
             dtype = col["type"]
 
-            columns[name] = {
-                "type": str(dtype),
-                "primary_key": name in pk,
-                "nullable": col.get("nullable", True),
-                "default": handle_default(col.get("default")),
-                "autoincrement": bool(col.get("autoincrement")),
-                "computed": bool(col.get("computed")),
-                "foreign_keys": fk_map.get(name, []),
-                "length": (
-                    getattr(dtype, "length", None) or getattr(dtype, "precision", None)
-                ),
-            }
+            columns.append(
+                {
+                    "name": name,
+                    "type": str(dtype),
+                    "primary_key": name in pk,
+                    "nullable": col.get("nullable", True),
+                    "default": handle_default(col.get("default")),
+                    "autoincrement": bool(col.get("autoincrement")),
+                    "computed": bool(col.get("computed")),
+                    "foreign_keys": fk_map.get(name, {}),
+                    "length": (
+                        getattr(dtype, "length", None)
+                        or getattr(dtype, "precision", None)
+                    ),
+                }
+            )
         meta["columns"] = columns
         return meta
 
@@ -288,8 +295,8 @@ class DatabaseManager:
         return sorted(unique_cols)
 
     @requires("inspector")
-    def get_foreign_keys(self, table: str) -> dict[str, List[dict[str, str]]]:
-        fk_map: dict[str, List[dict[str, str]]] = {}
+    def get_foreign_keys(self, table: str) -> dict[str, dict[str, str]]:
+        fk_map: dict[str, dict[str, str]] = {}
 
         for fk in self.inspector.get_foreign_keys(table):
             ref_tbl = fk.get("referred_table")
@@ -297,8 +304,26 @@ class DatabaseManager:
             local_cols = fk.get("constrained_columns", [])
 
             for src, dest in zip(local_cols, ref_cols):
-                fk_map.setdefault(src, []).append({"table": ref_tbl, "column": dest})
+                fk_map[src] = {"table": ref_tbl, "column": dest}
+
         return fk_map
+
+
+class Populator:
+    def __init__(self):
+        self.faker = Faker()
+
+    @property
+    def methods(self) -> list[str]:
+        if not hasattr(self, "_methods"):
+            self._methods = []
+            for method in dir(self.faker):
+                with contextlib.suppress(Exception):
+                    if not method.startswith("_"):
+                        getattr(self.faker, method)()
+                        self._methods.append(method)
+
+        return self._methods
 
 
 class Response:

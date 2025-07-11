@@ -65,7 +65,11 @@ export default function DashboardPage() {
               setActiveTable={setActiveTable}
               activeTable={activeTable}
             />
-            <InsertionPanel dbData={dbData} activeTable={activeTable} />
+            <InsertionPanel
+              dbData={dbData}
+              activeTable={activeTable}
+              setActiveTable={setActiveTable}
+            />
           </div>
         </div>
       </div>

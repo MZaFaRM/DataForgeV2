@@ -50,6 +50,7 @@
     "@tauri-apps/plugin-window": "2.0.0-alpha.0",
     "@vitejs/plugin-react": "^4.6.0",
     "@vitejs/plugin-react-swc": "^3.3.2",
+    "camelcase-keys": "^9.1.3",
     "cmdk": "^0.2.0",
     "date-fns": "^2.30.0",
     "lucide-react": "^0.263.1",

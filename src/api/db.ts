@@ -1,4 +1,4 @@
-import { DbData, TableData } from "@/components/types"
+import { DbData, TableData, TableEntry } from "@/components/types"
 
 import { invokeAndExtract } from "./cli"
 
@@ -15,7 +15,7 @@ export function invokeDbDisconnect() {
 }
 
 export function invokeGetTables() {
-  return invokeAndExtract<void, any>({ kind: "get_tables" })
+  return invokeAndExtract<void, TableEntry[]>({ kind: "get_tables" })
 }
 
 export function invokeTableData(table: string) {

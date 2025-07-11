@@ -19,22 +19,35 @@ interface DbData {
   error?: string
 }
 
+interface ColumnData {
+  name: string
+  type: string
+  primaryKey: boolean
+  nullable: boolean
+  default: string | null
+  autoincrement: boolean
+  computed: boolean
+  foreignKeys: { table: string; column: string }
+  length: number | null
+}
+
 interface TableData {
   uniques: string[][]
   parents: string[]
-  columns: Record<
-    string,
-    {
-      type: string
-      primaryKey: boolean
-      nullable: boolean
-      default: string | null
-      autoincrement: boolean
-      computed: boolean
-      foreignKeys: { table: string; column: string }[]
-      length: number | null
-    }
-  >
+  columns: ColumnData[]
 }
 
-export type { CliResponse, CliRequest, DbData, TableData }
+interface TableEntry {
+  name: string
+  parents: number
+  rows: number
+}
+
+export type {
+  CliResponse,
+  CliRequest,
+  DbData,
+  TableData,
+  TableEntry,
+  ColumnData,
+}

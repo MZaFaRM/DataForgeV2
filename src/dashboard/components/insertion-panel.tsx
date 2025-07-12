@@ -8,6 +8,7 @@ import { CaretSortIcon, CheckIcon } from "@radix-ui/react-icons"
 import { getCurrentWindow } from "@tauri-apps/api/window"
 import { githubDark, githubLight } from "@uiw/codemirror-theme-github"
 import CodeMirror, { EditorView } from "@uiw/react-codemirror"
+import { ta } from "date-fns/locale"
 import { useTheme } from "next-themes"
 
 import { cn } from "@/lib/utils"
@@ -64,6 +65,7 @@ export default function InsertionPanel({
   setActiveTable,
 }: ListTablesProps) {
   const ref = useRef<HTMLDivElement>(null)
+  const tableContainerRef = useRef<HTMLDivElement>(null)
   const [availableHeight, setAvailableHeight] = useState("")
   const [availableWidth, setAvailableWidth] = useState("")
   const [timeOfDay, setTimeOfDay] = useState<
@@ -73,6 +75,35 @@ export default function InsertionPanel({
   const [fakerMethods, setFakerMethods] = useState<string[]>([])
   const [hoveredGroup, setHoveredGroup] = useState<string[] | null>(null)
   const [activeTab, setActiveTab] = useState<string>("insert")
+  const [logs, setLogs] = useState<string[]>([
+    "[INFO  sqlalchemy.engine.Engine] SHOW VARIABLES LIKE 'sql_mode'",
+    "[INFO  sqlalchemy.engine.Engine] {'param_1': 'sql_mode'}",
+    "[INFO  sqlalchemy.engine.Engine] Collected server setting: STRICT_TRANS_TABLES,NO_ENGINE_SUBSTITUTION",
+    "[INFO  sqlalchemy.engine.Engine] SELECT TABLE_NAME FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_SCHEMA=%s",
+    "[INFO  sqlalchemy.engine.Engine] {'TABLE_SCHEMA': 'test_db'}",
+    "[INFO  sqlalchemy.engine.Engine] Retrieved 42 table(s) from schema `test_db`",
+    "[INFO  sqlalchemy.engine.Engine] DESCRIBE `user_activity`",
+    "[INFO  sqlalchemy.engine.Engine] {}",
+    "[INFO  sqlalchemy.engine.Engine] Columns: [id, user_id, activity_type, metadata, created_at, updated_at]",
+    "[DEBUG sqlalchemy.pool.impl.QueuePool] Connection <mysql.connector.connection.MySQLConnection object at 0x102fe8120> checked out from pool",
+    "[INFO  sqlalchemy.engine.Engine] INSERT INTO `order_logs` (`order_id`, `status`, `payload`, `created_at`) VALUES (%s, %s, %s, %s)",
+    "[INFO  sqlalchemy.engine.Engine] (88273, 'FAILED', '{'error':'timeout','retry':false}', '2025-07-11 13:28:45')",
+    "[INFO  sqlalchemy.engine.Engine] SELECT `user_id`, COUNT(*) AS `login_count` FROM `logins` WHERE `created_at` >= %s GROUP BY `user_id` HAVING `login_count` > %s ORDER BY `login_count` DESC",
+    "[INFO  sqlalchemy.engine.Engine] ('2025-01-01 00:00:00', 100)",
+    "[WARNING sqlalchemy.dialects.mysql.base] Column 'session_data' has a JSON type but is mapped as a TEXT. Consider using the JSON type for better integration.",
+    "[INFO  sqlalchemy.engine.Engine] SHOW CREATE TABLE `audit_events`",
+    "[INFO  sqlalchemy.engine.Engine] {}",
+    "[INFO  sqlalchemy.engine.Engine] ",
+    "CREATE TABLE `audit_events` (",
+    "  `id` int NOT NULL AUTO_INCREMENT,",
+    "  `event_type` varchar(50) DEFAULT NULL,",
+    "  `data` json DEFAULT NULL,",
+    "  `created_at` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,",
+    "  PRIMARY KEY (`id`)",
+    ") ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci",
+    "[INFO  sqlalchemy.engine.Engine] COMMIT",
+    "[DEBUG sqlalchemy.pool.impl.QueuePool] Connection <mysql.connector.connection.MySQLConnection object at 0x103d9a2b0> returned to pool",
+  ])
 
   useEffect(() => {
     getTimeOfDay()
@@ -106,6 +137,28 @@ export default function InsertionPanel({
   useEffect(() => {
     getTableData()
   }, [activeTable])
+
+  useEffect(() => {
+    if (!tableContainerRef.current) return
+    if (activeTab === "insert" || activeTab === "preview") {
+      console.log("Scrolling to top of preview")
+      tableContainerRef.current.scrollTo({
+        top: 0,
+        left: 0,
+        behavior: "smooth",
+      })
+    } else if (activeTab === "log") {
+      setTimeout(() => {
+        if (tableContainerRef.current) {
+          tableContainerRef.current.scrollTo({
+            top: tableContainerRef.current.scrollHeight,
+            left: 0,
+            behavior: "smooth",
+          })
+        }
+      })
+    }
+  }, [activeTab, activeTable])
 
   function getTimeOfDay() {
     const hour = new Date().getHours()
@@ -205,38 +258,52 @@ export default function InsertionPanel({
       <div className="flex items-end">
         <div className="ml-auto flex items-center rounded text-sm font-medium">
           <TabButton
+            label="Log"
+            icon="octicon:log-16"
+            isActive={activeTab === "log"}
+            onClick={() => setActiveTab("log")}
+          />
+          <TabButton
+            label="Preview"
+            icon="lucide:view"
+            isActive={activeTab === "preview"}
+            onClick={() => setActiveTab("preview")}
+          />
+          <TabButton
             label="Insert"
             icon="dashicons:insert"
             isActive={activeTab === "insert"}
             onClick={() => setActiveTab("insert")}
           />
-          <TabButton
-            label="View"
-            icon="lucide:view"
-            isActive={activeTab === "view"}
-            onClick={() => setActiveTab("view")}
-          />
         </div>
       </div>
-      <div className="flex h-full w-full flex-col overflow-auto rounded rounded-tr-none border">
+      <div className="flex h-full w-full flex-col overflow-hidden rounded rounded-tr-none border">
         {tableData && tableData.columns ? (
           activeTab === "insert" ? (
-            <Table>
-              <TableBody>
-                {tableData.columns.map((column) => (
-                  <DBColumn
-                    key={column.name}
-                    column={column}
-                    fakerMethods={fakerMethods}
-                    uniques={tableData.uniques}
-                    hoveredGroup={hoveredGroup}
-                    setHoveredGroup={setHoveredGroup}
-                  />
-                ))}
-              </TableBody>
-            </Table>
-          ) : (
-            <>
+            <div
+              className="h-full w-full overflow-auto"
+              ref={tableContainerRef}
+            >
+              <Table>
+                <TableBody>
+                  {tableData.columns.map((column) => (
+                    <DBColumn
+                      key={column.name}
+                      column={column}
+                      fakerMethods={fakerMethods}
+                      uniques={tableData.uniques}
+                      hoveredGroup={hoveredGroup}
+                      setHoveredGroup={setHoveredGroup}
+                    />
+                  ))}
+                </TableBody>
+              </Table>
+            </div>
+          ) : activeTab === "preview" ? (
+            <div
+              className="h-full w-full overflow-auto"
+              ref={tableContainerRef}
+            >
               <Table>
                 <TableHeader>
                   <TableRow>
@@ -250,8 +317,33 @@ export default function InsertionPanel({
 
                 {/* </TableBody> */}
               </Table>
-              <div className="text-sm font-medium w-full text-center mt-5 text-slate-400">Table Preview</div>
-            </>
+            </div>
+          ) : (
+            <div
+              className="flex h-full w-full flex-col overflow-auto p-4"
+              ref={tableContainerRef}
+            >
+              <div className="mt-auto">
+                {logs
+                  .slice()
+                  .reverse()
+                  .map((log, index) => (
+                    <p
+                      key={index}
+                      className={cn(
+                        "text-sm text-muted-foreground",
+                        index === logs.length - 1 &&
+                          "font-medium text-slate-400"
+                      )}
+                    >
+                      {log}
+                    </p>
+                  ))}
+                {Array.from({ length: 4 }).map((_, index) => (
+                  <br key={index} />
+                ))}
+              </div>
+            </div>
           )
         ) : (
           <div className="flex h-full w-full items-center justify-center">

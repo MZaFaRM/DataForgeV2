@@ -1,9 +1,14 @@
 import { useEffect, useRef, useState } from "react"
 import { invokeTableData } from "@/api/db"
 import { invokeGetFakerMethods } from "@/api/fill"
+import { python } from "@codemirror/lang-python"
+import { sql } from "@codemirror/lang-sql"
 import { Icon } from "@iconify/react"
 import { CaretSortIcon, CheckIcon } from "@radix-ui/react-icons"
 import { getCurrentWindow } from "@tauri-apps/api/window"
+import { githubDark, githubLight } from "@uiw/codemirror-theme-github"
+import CodeMirror, { EditorView } from "@uiw/react-codemirror"
+import { useTheme } from "next-themes"
 
 import { cn } from "@/lib/utils"
 import { Badge } from "@/components/ui/badge"
@@ -67,6 +72,7 @@ export default function InsertionPanel({
   const [tableData, setTableData] = useState<TableData | null>(null)
   const [fakerMethods, setFakerMethods] = useState<string[]>([])
   const [hoveredGroup, setHoveredGroup] = useState<string[] | null>(null)
+  const [activeTab, setActiveTab] = useState<string>("insert")
 
   useEffect(() => {
     getTimeOfDay()
@@ -196,22 +202,57 @@ export default function InsertionPanel({
           </>
         )}
       </div>
-      <div className="relative flex h-full w-full flex-col overflow-auto rounded border">
+      <div className="flex items-end">
+        <div className="ml-auto flex items-center rounded text-sm font-medium">
+          <TabButton
+            label="Insert"
+            icon="dashicons:insert"
+            isActive={activeTab === "insert"}
+            onClick={() => setActiveTab("insert")}
+          />
+          <TabButton
+            label="View"
+            icon="lucide:view"
+            isActive={activeTab === "view"}
+            onClick={() => setActiveTab("view")}
+          />
+        </div>
+      </div>
+      <div className="flex h-full w-full flex-col overflow-auto rounded rounded-tr-none border">
         {tableData && tableData.columns ? (
-          <Table>
-            <TableBody>
-              {tableData.columns.map((column) => (
-                <DBColumn
-                  key={column.name}
-                  column={column}
-                  fakerMethods={fakerMethods}
-                  uniques={tableData.uniques}
-                  hoveredGroup={hoveredGroup}
-                  setHoveredGroup={setHoveredGroup}
-                />
-              ))}
-            </TableBody>
-          </Table>
+          activeTab === "insert" ? (
+            <Table>
+              <TableBody>
+                {tableData.columns.map((column) => (
+                  <DBColumn
+                    key={column.name}
+                    column={column}
+                    fakerMethods={fakerMethods}
+                    uniques={tableData.uniques}
+                    hoveredGroup={hoveredGroup}
+                    setHoveredGroup={setHoveredGroup}
+                  />
+                ))}
+              </TableBody>
+            </Table>
+          ) : (
+            <>
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    {tableData.columns.map((column) => (
+                      <TableHead key={column.name}>{column.name}</TableHead>
+                    ))}
+                  </TableRow>
+                </TableHeader>
+
+                {/* <TableBody> */}
+
+                {/* </TableBody> */}
+              </Table>
+              <div className="text-sm font-medium w-full text-center mt-5 text-slate-400">Table Preview</div>
+            </>
+          )
         ) : (
           <div className="flex h-full w-full items-center justify-center">
             <Icon
@@ -220,20 +261,12 @@ export default function InsertionPanel({
             />
           </div>
         )}
-        <div className="absolute bottom-2 right-2 opacity-50 hover:opacity-100">
-          <Tabs defaultValue="account" className="w-full">
-            <TabsList>
-              <TabsTrigger value="account">Insert</TabsTrigger>
-              <TabsTrigger value="password">View</TabsTrigger>
-            </TabsList>
-          </Tabs>
-        </div>
       </div>
     </div>
   )
 }
 
-interface DataImportProps {
+interface DBColumnProps {
   column: ColumnData
   hoveredGroup: string[] | null
   setHoveredGroup: (group: string[] | null) => void
@@ -247,8 +280,8 @@ function DBColumn({
   fakerMethods,
   hoveredGroup,
   setHoveredGroup,
-}: DataImportProps) {
-  const [baseSelect, setBaseSelect] = useState("foreign")
+}: DBColumnProps) {
+  const [baseSelect, setBaseSelect] = useState("faker")
   const [advancedSelect, setAdvanceSelect] = useState<string | null>(null)
   const [nullProbability, setNullProbability] = useState(0)
 
@@ -295,21 +328,42 @@ function DBColumn({
 
       <TableCell>
         <div
+          className="w-[100px]"
           title={
             nullReason || `${nullProbability}% inserted values will be null`
           }
         >
           <Popover>
-            <PopoverTrigger asChild disabled={Boolean(nullReason)}>
-              <Icon
-                icon="tabler:salt"
-                className={cn(
-                  "ml-2 h-4 w-4",
-                  nullReason
-                    ? "cursor-not-allowed text-stone-500"
-                    : "cursor-pointer"
-                )}
-              />
+            <PopoverTrigger asChild>
+              <div className="flex items-center">
+                <Icon
+                  icon="tabler:salt"
+                  className={cn(
+                    "mr-2 h-4 w-4",
+                    nullReason
+                      ? "cursor-not-allowed text-stone-500"
+                      : "cursor-pointer"
+                  )}
+                />
+                <Badge
+                  variant={nullProbability > 0 ? "outline" : "secondary"}
+                  className={cn(
+                    nullReason
+                      ? "cursor-not-allowed text-muted-foreground"
+                      : "cursor-pointer"
+                  )}
+                  onClick={(e) => {
+                    if (nullReason) return
+                    e.stopPropagation()
+                    e.preventDefault()
+                    setNullProbability((prev) =>
+                      prev === 0 ? 1 : prev === 1 ? 5 : prev == 5 ? 10 : 0
+                    )
+                  }}
+                >
+                  {nullProbability}%
+                </Badge>
+              </div>
             </PopoverTrigger>
             <PopoverContent className="w-44 bg-popover text-sm font-semibold">
               <label className="mb-2 block">
@@ -322,6 +376,7 @@ function DBColumn({
                 value={nullProbability}
                 onChange={(e) => setNullProbability(Number(e.target.value))}
                 className="w-full"
+                disabled={Boolean(nullReason)}
               />
             </PopoverContent>
           </Popover>
@@ -345,6 +400,7 @@ function DBColumn({
           fakerMethods={fakerMethods}
         />
       </TableCell>
+      <TableCell></TableCell>
     </TableRow>
   )
 }
@@ -434,6 +490,24 @@ function BaseFillSelect({
                 Regex
               </div>
             </SelectItem>
+            <SelectItem value="python">
+              <div className="flex items-center">
+                <Icon
+                  icon="material-icon-theme:python"
+                  className="mr-2 h-4 w-4"
+                />
+                Py Script
+              </div>
+            </SelectItem>
+            <SelectItem value="sql">
+              <div className="flex items-center">
+                <Icon
+                  icon="ph:file-sql"
+                  className="mr-2 h-4 w-4 text-violet-400"
+                />
+                SQL Script
+              </div>
+            </SelectItem>
           </>
         )}
       </SelectContent>
@@ -457,6 +531,16 @@ function AdvancedFillSelect({
   fakerMethods,
 }: AdvancedFillSelectProps) {
   const [open, setOpen] = useState(false)
+  const [highlighted, setHighlighted] = useState<string>("")
+  const [focused, setFocused] = useState(false)
+  const { theme } = useTheme()
+
+  // useEffect(() => {
+  //   if (selected) {
+  //     se
+
+  //   }
+  // }, [selected])
 
   return baseSelect === "faker" ? (
     <Popover open={open} onOpenChange={setOpen}>
@@ -518,12 +602,88 @@ function AdvancedFillSelect({
       </PopoverTrigger>
     </Popover>
   ) : baseSelect === "regex" ? (
-    <Input
-      type="text"
-      placeholder="Enter regex"
-      className="w-[200px]"
-      value={selected ?? ""}
-      onChange={(e) => setSelected(e.target.value)}
-    />
+    <div className="overflow-auto rounded border">
+      <CodeMirror
+        placeholder={"Regex (Python engine)"}
+        value={selected ?? ""}
+        extensions={[EditorView.lineWrapping]}
+        theme={theme === "light" ? githubLight : githubDark}
+        onFocus={() => setFocused(true)}
+        onBlur={() => setFocused(false)}
+        height="auto"
+        minHeight="35px"
+        maxHeight="200px"
+        className="w-150 cm-content"
+        basicSetup={{
+          lineNumbers: false,
+          foldGutter: false,
+        }}
+      />
+    </div>
+  ) : baseSelect === "python" ? (
+    <div className="overflow-auto rounded border">
+      <CodeMirror
+        placeholder={"# Python Function"}
+        value={selected ?? ""}
+        extensions={[python(), EditorView.lineWrapping]}
+        theme={theme === "light" ? githubLight : githubDark}
+        onFocus={() => setFocused(true)}
+        onBlur={() => setFocused(false)}
+        height="auto"
+        minHeight="35px"
+        maxHeight="200px"
+        className="w-150"
+        basicSetup={{
+          lineNumbers: false,
+          foldGutter: false,
+        }}
+      />
+    </div>
+  ) : baseSelect === "sql" ? (
+    <div className="overflow-auto rounded border">
+      <CodeMirror
+        value={selected ?? ""}
+        placeholder={"-- SQL expression"}
+        extensions={[sql(), EditorView.lineWrapping]}
+        theme={theme === "light" ? githubLight : githubDark}
+        onFocus={() => setFocused(true)}
+        onBlur={() => setFocused(false)}
+        height="auto"
+        minHeight="35px"
+        maxHeight="200px"
+        basicSetup={{
+          lineNumbers: false,
+          foldGutter: false,
+        }}
+        style={{ whiteSpace: "pre" }}
+      />
+    </div>
   ) : null
+}
+
+function TabButton({
+  label,
+  icon,
+  isActive,
+  onClick,
+}: {
+  label: string
+  icon: string
+  isActive: boolean
+  onClick: () => void
+}) {
+  return (
+    <div
+      className={cn(
+        "w-32 cursor-pointer rounded rounded-b-none px-4 py-2 text-center",
+        isActive ? "border border-b-0 bg-muted" : "opacity-50"
+      )}
+      onClick={onClick}
+    >
+      <div className="inline-flex items-center">
+        <Icon icon={icon} className="h-4 w-4" />
+        <p className="ml-2">{label}</p>
+      </div>
+    </div>
+  )
 }

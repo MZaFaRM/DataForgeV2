@@ -86,3 +86,7 @@
       "calt" 1;
   }
 }
+
+.cm-content {
+  color: orange !important;
+}

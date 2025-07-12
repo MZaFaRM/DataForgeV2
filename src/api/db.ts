@@ -3,7 +3,7 @@ import { DbData, TableData, TableEntry } from "@/components/types"
 import { invokeAndExtract } from "./cli"
 
 export function invokeDbInfo() {
-  return invokeAndExtract<void, DbData>({ kind: "get_info" })
+  return invokeAndExtract<void, DbData>({ kind: "info" })
 }
 
 export function invokeDbConnection(dbCreds: DbData) {
@@ -15,12 +15,12 @@ export function invokeDbDisconnect() {
 }
 
 export function invokeGetTables() {
-  return invokeAndExtract<void, TableEntry[]>({ kind: "get_tables" })
+  return invokeAndExtract<void, TableEntry[]>({ kind: "tables" })
 }
 
 export function invokeTableData(table: string) {
-  return invokeAndExtract<string, TableData>({
-    kind: "get_table_metadata",
-    body: table,
+  return invokeAndExtract<{ name: string }, TableData>({
+    kind: "table_metadata",
+    body: { name: table },
   })
 }

@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react"
 import { invokeTableData } from "@/api/db"
-import { invokeGetFakerMethods } from "@/api/fill"
+import { invokeGetFakerMethods, invokeVerifySpec } from "@/api/fill"
 import { python } from "@codemirror/lang-python"
 import { sql } from "@codemirror/lang-sql"
 import { Icon } from "@iconify/react"
@@ -162,6 +162,28 @@ export default function InsertionPanel({
     }
   }, [activeTab, activeTable])
 
+  useEffect(() => {
+    if (activeTab === "preview") {
+      invokeVerifySpec({
+        name: "user",
+        columns: [
+          {
+            name: "id",
+            nullChance: 0.1,
+            method: "uuid4",
+            type: "faker",
+          },
+        ],
+      })
+        .then((res) => {
+          console.log("Spec verified:", res)
+        })
+        .catch((error) => {
+          console.error("Error verifying spec:", error)
+        })
+    }
+  }, [activeTab])
+
   function getTimeOfDay() {
     const hour = new Date().getHours()
 
@@ -240,7 +262,7 @@ export default function InsertionPanel({
                         variant="outline"
                         className="cursor-pointer font-medium hover:bg-muted-foreground hover:text-slate-300"
                         onClick={() => setActiveTable(parent)}
-                        title="parent tables"
+                        title="Parent Table"
                       >
                         {parent}
                       </Badge>
@@ -854,9 +876,7 @@ function HandleTransaction() {
             <DropdownMenuContent
               style={{ marginLeft: "-146px", width: "180px" }}
             >
-              <DropdownMenuItem
-                onSelect={() => console.log("Export SQL")}
-              >
+              <DropdownMenuItem onSelect={() => console.log("Export SQL")}>
                 <Icon icon="mdi:file-export" className="mr-4 h-4 w-4" />
                 Export SQL
               </DropdownMenuItem>

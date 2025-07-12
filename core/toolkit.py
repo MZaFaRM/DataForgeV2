@@ -1,7 +1,9 @@
 from collections.abc import Sequence
 import contextlib
 import os
+import re
 from faker import Faker
+from pydantic import BaseModel, model_validator, root_validator
 from sqlalchemy.engine import Engine, Inspector
 from sqlalchemy import create_engine
 from sqlalchemy import text as sql_text
@@ -11,11 +13,20 @@ from networkx import Graph
 from functools import wraps
 import json
 from dataclasses import dataclass
-from typing import Any, Optional, Literal
+from typing import Any, Callable, Optional, Literal
 
 from typing import Dict, List, Any
 from sqlalchemy.engine.reflection import Inspector
 from sqlalchemy.sql.schema import Column
+
+from core.types import (
+    ColumnMetadata,
+    ColumnPacket,
+    ForeignKeyRef,
+    TableMetadata,
+    TablePacket,
+    TableSpec,
+)
 
 
 class MissingRequiredAttributeError(Exception):
@@ -228,7 +239,7 @@ class DatabaseManager:
         return graph
 
     @requires("inspector")
-    def get_table_metadata(self, table_name: str) -> dict[str, Any]:
+    def get_table_metadata(self, table_name: str) -> TableMetadata:
         if table_name not in self.inspector.get_table_names():
             raise ValueError(f"Table '{table_name}' does not exist in the database.")
 
@@ -236,15 +247,9 @@ class DatabaseManager:
         pk = self.inspector.get_pk_constraint(table_name).get("constrained_columns", [])
         cols = self.inspector.get_columns(table_name)
 
-        meta: dict[str, Any] = {}
-        meta["uniques"] = self.get_unique_columns(table_name)
-        meta["parents"] = list(set(t["table"] for t in fk_map.values()))
-
         def handle_default(default_val):
             if default_val is None:
                 return None
-
-            # SQLAlchemy packs server-side defaults in its own objects
             if hasattr(default_val, "arg"):
                 return str(default_val.arg)
             return default_val
@@ -254,24 +259,25 @@ class DatabaseManager:
             name = col["name"]
             dtype = col["type"]
 
-            columns.append(
-                {
-                    "name": name,
-                    "type": str(dtype),
-                    "primary_key": name in pk,
-                    "nullable": col.get("nullable", True),
-                    "default": handle_default(col.get("default")),
-                    "autoincrement": bool(col.get("autoincrement")),
-                    "computed": bool(col.get("computed")),
-                    "foreign_keys": fk_map.get(name, {}),
-                    "length": (
-                        getattr(dtype, "length", None)
-                        or getattr(dtype, "precision", None)
-                    ),
-                }
+            column_metadata = ColumnMetadata(
+                name=name,
+                type=str(dtype),
+                primary_key=name in pk,
+                nullable=col.get("nullable", True),
+                default=handle_default(col.get("default")),
+                autoincrement=bool(col.get("autoincrement")),
+                computed=bool(col.get("computed")),
+                foreign_keys=fk_map.get(name, ForeignKeyRef(table="", column="")),
+                length=getattr(dtype, "length", None)
+                or getattr(dtype, "precision", None),
             )
-        meta["columns"] = columns
-        return meta
+            columns.append(column_metadata)
+
+        return TableMetadata(
+            uniques=self.get_unique_columns(table_name),
+            parents=list(set(t.table for t in fk_map.values())),
+            columns=columns,
+        )
 
     @requires("inspector")
     def get_unique_columns(self, table: str) -> list[tuple[str, ...]]:
@@ -295,8 +301,8 @@ class DatabaseManager:
         return sorted(unique_cols)
 
     @requires("inspector")
-    def get_foreign_keys(self, table: str) -> dict[str, dict[str, str]]:
-        fk_map: dict[str, dict[str, str]] = {}
+    def get_foreign_keys(self, table: str) -> dict[str, ForeignKeyRef]:
+        fk_map = {}
 
         for fk in self.inspector.get_foreign_keys(table):
             ref_tbl = fk.get("referred_table")
@@ -304,7 +310,10 @@ class DatabaseManager:
             local_cols = fk.get("constrained_columns", [])
 
             for src, dest in zip(local_cols, ref_cols):
-                fk_map[src] = {"table": ref_tbl, "column": dest}
+                fk_map[src] = ForeignKeyRef(
+                    column=dest,
+                    table=ref_tbl,
+                )
 
         return fk_map
 
@@ -324,6 +333,69 @@ class Populator:
                         self._methods.append(method)
 
         return self._methods
+
+    def verify_dataset(self, db: DatabaseManager, table_spec: TableSpec) -> TablePacket:
+        metadata = db.get_table_metadata(table_spec.name)
+        columns = {c.name: c for c in metadata.columns}
+        table_packet = TablePacket(name=table_spec.name, columns=[])
+
+        single_uniques = {u[0] for u in metadata.uniques if len(u) == 1}
+        # multi_uniques = [u for u in metadata.uniques if len(u) > 1]  # Not used yet
+
+        for col in table_spec.columns:
+            if col.method is None:
+                continue
+
+            # Run validation
+            self.verify_method(col)
+
+            # Choose generation function
+            method_fn = self.get_processing_method(col)
+
+            # Preload forbidden values for unique checks
+            forbidden = set()
+            if col.name in single_uniques:
+                with db.engine.connect() as conn:
+                    result = conn.execute(
+                        sql_text(
+                            f"SELECT {col.name} FROM {table_spec.name} WHERE {col.name} IS NOT NULL"
+                        )
+                    )
+                    forbidden = set(row[0] for row in result)
+
+            # Generate value (retry if in forbidden)
+            value = method_fn(columns, col)
+            while forbidden and value in forbidden:
+                forbidden.remove(value)
+                value = method_fn(columns, col)
+
+            table_packet.columns.append(ColumnPacket(name=col.name, value=str(value)))
+
+        return table_packet
+
+    def get_processing_method(self, col) -> Callable:
+        return {
+            "faker": self.make_faker,
+            # "regex": self.make_regex,  # future
+            # "py": self.make_python,  # future
+            # "foreign": self.make_foreign,  # future
+        }.get(col.type, lambda *_: None)
+
+    def make_faker(self, spec, col) -> Any:
+        func = getattr(self.faker, col.method)
+        value = func()
+        if isinstance(value, str) and spec[col.name].length is not None:
+            value = value[: spec[col.name].length]
+        return value
+
+    def verify_method(self, col):
+        if col.type == "faker":
+            func = getattr(self.faker, col.method, None)
+            assert callable(
+                func
+            ), f"Faker method '{col.method}' is not callable or doesn't exist."
+            assert func() is not None, f"Faker method '{col.method}' returned None."
+        # Add other verifiers for regex, py, foreign later
 
 
 class Response:
@@ -346,3 +418,27 @@ class Response:
             "error": self.error,
             "traceback": self.traceback,
         }
+
+
+class Request(BaseModel):
+    kind: str
+    body: dict[str, Any] | None = None
+
+    @staticmethod
+    def _snake(s: str) -> str:
+        return re.sub(r"(?<!^)(?=[A-Z])", "_", s).lower()
+
+    @classmethod
+    def _transform(cls, obj: Any) -> Any:
+        if isinstance(obj, dict):
+            return {cls._snake(k): cls._transform(v) for k, v in obj.items()}
+        elif isinstance(obj, list):
+            return [cls._transform(v) for v in obj]
+        return obj
+
+    @model_validator(mode="before")
+    @classmethod
+    def normalize_body(cls, data: dict) -> dict:
+        if "body" in data:
+            data["body"] = cls._transform(data["body"])
+        return data

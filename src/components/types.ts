@@ -1,15 +1,15 @@
-type CliResponse<T> = Record<string, unknown> & {
+export type CliResponse<T> = Record<string, unknown> & {
   status: "ok" | "error"
   payload?: T
   error?: string
 }
 
-type CliRequest<T> = Record<string, unknown> & {
+export type CliRequest<T> = Record<string, unknown> & {
   kind: string
   body?: T
 }
 
-interface DbData {
+export interface DbData {
   host: string
   user: string
   port: string
@@ -19,7 +19,7 @@ interface DbData {
   error?: string
 }
 
-interface ColumnData {
+export interface ColumnData {
   name: string
   type: string
   primaryKey: boolean
@@ -31,34 +31,45 @@ interface ColumnData {
   length: number | null
 }
 
-interface TableData {
+export interface TableData {
   uniques: string[][]
   parents: string[]
   columns: ColumnData[]
 }
 
-interface TableEntry {
+export interface TableEntry {
   name: string
   parents: number
   rows: number
 }
 
-interface DataEntry {}
+export interface DataEntry {}
 
-interface DataPackage {
+export interface DataPackage {
   verified: boolean
   table: string
   entries: DataEntry[]
   inserted: boolean
 }
 
-export type {
-  CliResponse,
-  CliRequest,
-  DbData,
-  TableData,
-  TableEntry,
-  ColumnData,
-  DataEntry,
-  DataPackage,
+export interface ColumnSpec {
+  name: string
+  nullChance: number
+  method: string | null
+  type: "faker" | "regex" | "foreign" | "auto"
+}
+
+export interface TableSpec {
+  name: string
+  columns: ColumnSpec[]
+}
+
+export interface ColumnPacket {
+  name: string
+  value: string | null
+}
+
+export interface TablePacket {
+  name: string
+  columns: ColumnPacket[]
 }

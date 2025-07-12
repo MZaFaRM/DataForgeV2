@@ -178,7 +178,7 @@ export default function ListTables({
               ref={tableEntry.name === activeTable ? activeTableRef : undefined}
               parents={tableEntry.parents}
               rowsInserted={0}
-              rows={tableEntry.rows || 1999}
+              rows={tableEntry.rows}
               inserted={false}
               active={tableEntry.name === activeTable}
               onClick={() => setActiveTable(tableEntry.name)}

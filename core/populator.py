@@ -2,137 +2,17 @@ import json
 import sys
 import threading
 import traceback
+from typing import Any
 
-from .toolkit import DatabaseManager, Populator, Response
+from core.types import TableSpec
+
+from .toolkit import DatabaseManager, Populator, Request, Response
 
 
 class Runner:
     def __init__(self):
         self.db = DatabaseManager()
         self.populator = Populator()
-
-    def handle_command(self, command: dict) -> dict:
-        try:
-            kind = command.get("kind")
-
-            if kind == "connect":
-                # expects: { kind: "connect", body: {...} }
-                creds = command.get("body", {})
-                required_keys = ["host", "user", "port", "name", "password"]
-                missing = []
-
-                for key in required_keys:
-                    value = creds.get(key, "")
-                    setattr(self.db, key, value)
-                    if not value:
-                        missing.append(key)
-
-                if missing:
-                    if len(missing) == 1:
-                        msg = f"Missing required connection parameter: {missing[0]}."
-                    else:
-                        msg = f"Missing required connection parameters: {', '.join(missing[:-1])}, and {missing[-1]}."
-                    return Response(status="error", error=msg).to_dict()
-
-                self.db.create_url()
-                self.db.create_engine()
-                self.db.create_inspector()
-                self.db.test_connection()
-
-                return Response(status="ok", payload=self.db.to_dict()).to_dict()
-
-            elif kind == "disconnect":
-                self.db = DatabaseManager()
-                return Response(
-                    status="ok", payload="Disconnected successfully."
-                ).to_dict()
-
-            elif kind == "get_tables":
-                # expects: { kind: "get_tables" }
-                table_info = {"table_data": {}, "sorted_tables": []}
-                t1 = threading.Thread(
-                    target=lambda: table_info.update(
-                        {"table_data": self.db.get_tables()}
-                    )
-                )
-                t2 = threading.Thread(
-                    target=lambda: table_info.update(
-                        {"sorted_tables": self.db.sort_tables()}
-                    )
-                )
-
-                t1.start()
-                t2.start()
-                t1.join()
-                t2.join()
-
-                sorted_tables = table_info["sorted_tables"]
-                table_data = table_info["table_data"]
-
-                return Response(
-                    status="ok",
-                    payload=[
-                        {
-                            "name": table,
-                            "rows": table_data[table]["rows"],
-                            "parents": table_data[table]["parents"],
-                        }
-                        for table in sorted_tables
-                    ],
-                ).to_dict()
-
-            elif kind == "get_table_metadata":
-                # expects: { kind: "get_table_metadata", body: "users" }
-                table = command.get("body", "")
-                if not table:
-                    return Response(
-                        status="error",
-                        error="Table name is required.",
-                    ).to_dict()
-
-                metadata = self.db.get_table_metadata(table)
-                if not metadata:
-                    return Response(
-                        status="error",
-                        error=f"No metadata found for table '{table}'.",
-                    ).to_dict()
-
-                return Response(
-                    status="ok",
-                    payload=metadata,
-                ).to_dict()
-
-            elif kind == "ping":
-                return Response(
-                    status="ok",
-                    payload="pong",
-                ).to_dict()
-
-            elif kind == "get_info":
-                return Response(
-                    status="ok",
-                    payload=self.db.to_dict(),
-                ).to_dict()
-            elif kind == "faker_methods":
-                # expects: { kind: "faker_methods" }
-                methods = self.populator.methods
-                return Response(
-                    status="ok",
-                    payload=methods,
-                ).to_dict()
-
-            else:
-                return Response(
-                    status="error",
-                    error=f"Unknown command: {kind}",
-                ).to_dict()
-
-        except Exception as e:
-            return Response(
-                status="error",
-                error=str(e),
-                traceback=traceback.format_exc(),
-            ).to_dict()
 
     def listen(self):
         for line in sys.stdin:
@@ -146,6 +26,7 @@ class Runner:
 
             try:
                 req = json.loads(line)
+                req = Request(**req)
                 res = self.handle_command(req)
             except Exception as e:
                 res = Response(
@@ -155,3 +36,97 @@ class Runner:
                 ).to_dict()
             finally:
                 print(json.dumps(res), flush=True)
+
+    def handle_command(self, command: Request) -> dict:
+        try:
+            handler = getattr(self, f"_handle_{command.kind}", None)
+            if not handler:
+                return self._err(f"Unknown command: {command.kind}")
+            return handler(command.body)
+        except Exception as e:
+            return Response(
+                status="error",
+                error=str(e),
+                traceback=traceback.format_exc(),
+            ).to_dict()
+
+    def _ok(self, payload: Any) -> dict:
+        return Response(status="ok", payload=payload).to_dict()
+
+    def _err(self, error: str) -> dict:
+        return Response(status="error", error=error).to_dict()
+
+    def _handle_ping(self, _=None) -> dict:
+        return self._ok("pong")
+
+    def _handle_info(self, _=None) -> dict:
+        return self._ok(self.db.to_dict())
+
+    def _handle_faker_methods(self, _=None) -> dict:
+        return self._ok(self.populator.methods)
+
+    def _handle_connect(self, creds: dict) -> dict:
+        required = ["host", "user", "port", "name", "password"]
+        missing = [k for k in required if not creds.get(k)]
+
+        for k in required:
+            setattr(self.db, k, creds.get(k, ""))
+
+        if missing:
+            msg = (
+                f"Missing required connection parameter: {missing[0]}"
+                if len(missing) == 1
+                else f"Missing required connection parameters: {', '.join(missing[:-1])}, and {missing[-1]}"
+            )
+            return self._err(msg)
+
+        self.db.create_url()
+        self.db.create_engine()
+        self.db.create_inspector()
+        self.db.test_connection()
+
+        return self._ok(self.db.to_dict())
+
+    def _handle_disconnect(self, _=None) -> dict:
+        self.db = DatabaseManager()
+        return self._ok("Disconnected successfully.")
+
+    def _handle_tables(self, _=None) -> dict:
+        table_info = {"table_data": {}, "sorted_tables": []}
+
+        t1 = threading.Thread(
+            target=lambda: table_info.update(table_data=self.db.get_tables())
+        )
+        t2 = threading.Thread(
+            target=lambda: table_info.update(sorted_tables=self.db.sort_tables())
+        )
+
+        t1.start()
+        t2.start()
+        t1.join()
+        t2.join()
+
+        return self._ok(
+            [
+                {
+                    "name": tbl,
+                    "rows": table_info["table_data"][tbl]["rows"],
+                    "parents": table_info["table_data"][tbl]["parents"],
+                }
+                for tbl in table_info["sorted_tables"]
+            ]
+        )
+
+    def _handle_table_metadata(self, body: dict) -> dict:
+        if "name" not in body:
+            return self._err("Table name is required.")
+
+        metadata = self.db.get_table_metadata(body["name"])
+        if not metadata:
+            return self._err(f"No metadata found for table '{body['name']}'.")
+
+        return self._ok(metadata.model_dump())
+
+    def _handle_verify_spec(self, body: dict) -> dict:
+        result = self.populator.verify_dataset(self.db, TableSpec(**body))
+        return self._ok(result.model_dump())

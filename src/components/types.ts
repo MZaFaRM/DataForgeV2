@@ -43,6 +43,15 @@ interface TableEntry {
   rows: number
 }
 
+interface DataEntry {}
+
+interface DataPackage {
+  verified: boolean
+  table: string
+  entries: DataEntry[]
+  inserted: boolean
+}
+
 export type {
   CliResponse,
   CliRequest,
@@ -50,4 +59,6 @@ export type {
   TableData,
   TableEntry,
   ColumnData,
+  DataEntry,
+  DataPackage,
 }

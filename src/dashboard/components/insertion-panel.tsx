@@ -8,6 +8,7 @@ import { CaretSortIcon, CheckIcon } from "@radix-ui/react-icons"
 import { getCurrentWindow } from "@tauri-apps/api/window"
 import { githubDark, githubLight } from "@uiw/codemirror-theme-github"
 import CodeMirror, { EditorView } from "@uiw/react-codemirror"
+import { set } from "date-fns"
 import { ta } from "date-fns/locale"
 import { useTheme } from "next-themes"
 
@@ -25,6 +26,7 @@ import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
+  DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
 import { Input } from "@/components/ui/input"
@@ -51,7 +53,7 @@ import {
   TableRow,
 } from "@/components/ui/table"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { ColumnData, DbData, TableData } from "@/components/types"
+import { ColumnData, DataPackage, DbData, TableData } from "@/components/types"
 
 interface ListTablesProps {
   dbData: DbData | null
@@ -213,46 +215,51 @@ export default function InsertionPanel({
             </p>
           </>
         ) : (
-          <>
-            <div className="mb-2 flex items-center space-x-2">
-              <h2 className="text-2xl font-semibold tracking-wide">
-                {activeTable}
-              </h2>
-              <Icon
-                key={activeTable}
-                icon="meteocons:smoke-particles"
-                className="h-8 w-8 text-muted-foreground"
-              />
-            </div>
+          <div className="flex items-start justify-between">
             <div>
-              <div className="mb-2 flex gap-2">
+              <div className="mb-2 flex items-center space-x-2">
+                <h2 className="text-2xl font-semibold tracking-wide">
+                  {activeTable}
+                </h2>
                 <Icon
-                  icon="carbon:parent-node"
-                  className="h-4 w-4 text-muted-foreground"
+                  key={activeTable}
+                  icon="meteocons:smoke-particles"
+                  className="h-8 w-8 text-muted-foreground"
                 />
-                {tableData?.parents && tableData.parents.length > 0 ? (
-                  tableData.parents.map((parent) => (
+              </div>
+              <div>
+                <div className="mb-2 flex gap-2">
+                  <Icon
+                    icon="carbon:parent-node"
+                    className="h-4 w-4 text-muted-foreground"
+                  />
+                  {tableData?.parents && tableData.parents.length > 0 ? (
+                    tableData.parents.map((parent) => (
+                      <Badge
+                        key={parent}
+                        variant="outline"
+                        className="cursor-pointer font-medium hover:bg-muted-foreground hover:text-slate-300"
+                        onClick={() => setActiveTable(parent)}
+                        title="parent tables"
+                      >
+                        {parent}
+                      </Badge>
+                    ))
+                  ) : (
                     <Badge
-                      key={parent}
                       variant="outline"
-                      className="cursor-pointer font-medium hover:bg-muted-foreground hover:text-slate-300"
-                      onClick={() => setActiveTable(parent)}
-                      title="parent tables"
+                      className="cursor-not-allowed bg-muted font-medium"
                     >
-                      {parent}
+                      Orphan
                     </Badge>
-                  ))
-                ) : (
-                  <Badge
-                    variant="outline"
-                    className="cursor-not-allowed bg-muted font-medium"
-                  >
-                    Orphan
-                  </Badge>
-                )}
+                  )}
+                </div>
               </div>
             </div>
-          </>
+            <div>
+              <HandleTransaction />
+            </div>
+          </div>
         )}
       </div>
       <div className="flex items-end">
@@ -775,6 +782,87 @@ function TabButton({
       <div className="inline-flex items-center">
         <Icon icon={icon} className="h-4 w-4" />
         <p className="ml-2">{label}</p>
+      </div>
+    </div>
+  )
+}
+
+function HandleTransaction() {
+  const [dataPackage, setDataPackage] = useState<DataPackage | null>(null)
+  const [openDropdown, setOpenDropdown] = useState(false)
+
+  useEffect(() => {
+    setDataPackage(() => {
+      return {
+        verified: true,
+        table: "user",
+        entries: [],
+        inserted: false,
+      }
+    })
+  }, [])
+
+  return (
+    <div className="flex gap-2">
+      <button
+        className="inline-flex items-center space-x-2 rounded-md border px-3 py-2 text-sm font-medium hover:bg-accent hover:text-accent-foreground"
+        onClick={() => {
+          console.log("Commit triggered")
+        }}
+      >
+        <Icon icon="ion:git-commit-sharp" className="h-4 w-4 text-violet-500" />
+        <span>Commit</span>
+      </button>
+
+      <button
+        className="inline-flex items-center space-x-2 rounded-md border px-3 py-2 text-sm font-medium hover:bg-accent hover:text-accent-foreground"
+        onClick={() => {
+          console.log("Rollback triggered")
+        }}
+      >
+        <Icon
+          icon="solar:rewind-back-bold-duotone"
+          className="h-4 w-4 text-amber-500"
+        />
+        <span>Rollback</span>
+      </button>
+      <div>
+        <div className="inline-flex overflow-hidden rounded-md border bg-green-500 text-white">
+          {/* Primary Save button */}
+          <button
+            onClick={() => {
+              console.log("Primary Save action - Insert to DB")
+            }}
+            className={cn(
+              "flex w-[145px] items-center px-3 py-2 text-sm font-medium hover:bg-green-600"
+            )}
+          >
+            <Icon icon="proicons:database-add" className="mr-2 h-4 w-4" />
+            Insert into DB
+          </button>
+
+          {/* Dropdown trigger */}
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <button
+                className="flex items-center border-l px-2 py-2 hover:bg-green-600"
+                onClick={(e) => e.preventDefault()} // optional, avoids double triggers
+              >
+                <Icon icon="mdi:chevron-down" className="h-4 w-4" />
+              </button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent
+              style={{ marginLeft: "-146px", width: "180px" }}
+            >
+              <DropdownMenuItem
+                onSelect={() => console.log("Export SQL")}
+              >
+                <Icon icon="mdi:file-export" className="mr-4 h-4 w-4" />
+                Export SQL
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+        </div>
       </div>
     </div>
   )

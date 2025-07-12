@@ -1,3 +1,4 @@
+import { useEffect, useRef, useState } from "react"
 import { invokeDbConnection, invokeDbDisconnect, invokeDbInfo } from "@/api/db"
 import { Icon } from "@iconify/react"
 import {
@@ -7,10 +8,8 @@ import {
   DropdownMenuSeparator,
 } from "@radix-ui/react-dropdown-menu"
 import { Eye, EyeOff } from "lucide-react"
-import { useEffect, useRef, useState } from "react"
 
-import { Icons } from "@/components/icons"
-import { DbData } from "@/components/types"
+import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
 import {
   Dialog,
@@ -23,7 +22,8 @@ import {
 import { DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import { cn } from "@/lib/utils"
+import { Icons } from "@/components/icons"
+import { DbData } from "@/components/types"
 
 interface ConnectionStatusProps {
   dbData: DbData | null
@@ -39,6 +39,9 @@ export default function ConnectionStatus({
   const [dbConnecting, setDbConnecting] = useState<boolean>(false)
   const [showPassword, setShowPassword] = useState<boolean>(false)
   const [errorField, setErrorField] = useState<string | null>(null)
+  const [refreshIcon, setRefreshIcon] = useState<
+    "line-md:check-all" | "mdi:refresh-circle"
+  >("mdi:refresh-circle")
 
   const triggerRef = useRef<HTMLButtonElement>(null)
   const [menuWidth, setMenuWidth] = useState<number | null>(null)
@@ -47,17 +50,14 @@ export default function ConnectionStatus({
     console.log("Fetching DB info...")
     setDbConnecting(true)
 
-    const start = Date.now()
-
     invokeDbInfo().then((payload) => {
       setDbInfo(payload)
-
-      const elapsed = Date.now() - start
-      const remaining = Math.max(1000 - elapsed, 0) // how much longer to spin
+      setRefreshIcon("line-md:check-all")
+      setDbConnecting(false)
 
       setTimeout(() => {
-        setDbConnecting(false)
-      }, remaining)
+        setRefreshIcon("mdi:refresh-circle")
+      }, 3000)
     })
   }
 
@@ -195,12 +195,13 @@ export default function ConnectionStatus({
 
         <DropdownMenuContent
           align="start"
+          sideOffset={0}
           style={{ width: menuWidth ? `${menuWidth}px` : undefined }}
           className={cn(
-            "select-none rounded border border-t-0 bg-popover p-2 shadow " +
-              // ❯ animations
-              "data-[state=open]:animate-in data-[state=open]:fade-in " +
-              "data-[state=open]:slide-in-from-top-1/2 "
+            "select-none rounded border border-t-0 bg-popover p-2 shadow",
+            // ❯ animations
+            "data-[state=open]:animate-in data-[state=open]:fade-in",
+            "data-[state=open]:slide-in-from-top-1/2"
           )}
         >
           <DropdownMenuItem
@@ -210,14 +211,16 @@ export default function ConnectionStatus({
             }}
             className="group flex items-center overflow-hidden rounded-t border-b px-4 py-2  hover:bg-accent hover:text-accent-foreground"
           >
-            {dbConnecting ? (
-              <Icons.spinner className="mr-2 h-4 w-4 animate-spin" />
-            ) : (
-              <Icon
-                icon="mdi:refresh-circle"
-                className="mr-2 h-4 w-4 group-hover:animate-spin"
-              />
-            )}
+            <Icon
+              key={refreshIcon}
+              icon={refreshIcon}
+              className={cn(
+                "mr-2 h-4 w-4",
+                refreshIcon === "mdi:refresh-circle"
+                  ? "group-hover:animate-spin"
+                  : ""
+              )}
+            />
             Refresh
           </DropdownMenuItem>
           <DropdownMenuItem

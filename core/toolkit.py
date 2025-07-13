@@ -274,6 +274,7 @@ class DatabaseManager:
             columns.append(column_metadata)
 
         return TableMetadata(
+            name=table_name,
             uniques=self.get_unique_columns(table_name),
             parents=list(set(t.table for t in fk_map.values())),
             columns=columns,
@@ -358,7 +359,7 @@ class Populator:
                 with db.engine.connect() as conn:
                     result = conn.execute(
                         sql_text(
-                            f"SELECT {col.name} FROM {table_spec.name} WHERE {col.name} IS NOT NULL"
+                            f"SELECT `{col.name}` FROM `{table_spec.name}` WHERE `{col.name}` IS NOT NULL"
                         )
                     )
                     forbidden = set(row[0] for row in result)

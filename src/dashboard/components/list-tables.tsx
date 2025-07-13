@@ -98,7 +98,6 @@ export default function ListTables({
 
   useEffect(() => {
     if (!dbData) {
-      console.log("dbData changed:", dbData)
       setTableEntries(null)
       setActiveTable(null)
     }
@@ -113,7 +112,6 @@ export default function ListTables({
     invokeGetTables()
       .then((res) => {
         setTableEntries(res)
-        console.log("Tables fetched:", res)
       })
       .catch((error) => {
         console.error("Error fetching tables:", error)

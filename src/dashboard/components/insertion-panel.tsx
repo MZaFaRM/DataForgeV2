@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react"
+import { Dispatch, SetStateAction, useEffect, useRef, useState } from "react"
 import { invokeTableData } from "@/api/db"
 import { invokeGetFakerMethods, invokeVerifySpec } from "@/api/fill"
 import { python } from "@codemirror/lang-python"
@@ -9,7 +9,7 @@ import { getCurrentWindow } from "@tauri-apps/api/window"
 import { githubDark, githubLight } from "@uiw/codemirror-theme-github"
 import CodeMirror, { EditorView } from "@uiw/react-codemirror"
 import { set } from "date-fns"
-import { ta } from "date-fns/locale"
+import { ta, tr } from "date-fns/locale"
 import { useTheme } from "next-themes"
 
 import { cn } from "@/lib/utils"
@@ -53,7 +53,16 @@ import {
   TableRow,
 } from "@/components/ui/table"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { ColumnData, DataPackage, DbData, TableData } from "@/components/types"
+import {
+  BaseSelectType,
+  ColumnData,
+  ColumnSpec,
+  DataPackage,
+  DbData,
+  TableData,
+  TablePacket,
+  TableSpec,
+} from "@/components/types"
 
 interface ListTablesProps {
   dbData: DbData | null
@@ -77,6 +86,9 @@ export default function InsertionPanel({
   const [fakerMethods, setFakerMethods] = useState<string[]>([])
   const [hoveredGroup, setHoveredGroup] = useState<string[] | null>(null)
   const [activeTab, setActiveTab] = useState<string>("insert")
+  const [columnSpecs, setColumnSpecs] = useState<Record<string, ColumnSpec>>({})
+  const [tablePackets, setTablePackets] = useState<TablePacket | null>(null)
+  const [pendingRefresh, setPendingRefresh] = useState(false)
   const [logs, setLogs] = useState<string[]>([
     "[INFO  sqlalchemy.engine.Engine] SHOW VARIABLES LIKE 'sql_mode'",
     "[INFO  sqlalchemy.engine.Engine] {'param_1': 'sql_mode'}",
@@ -115,7 +127,6 @@ export default function InsertionPanel({
 
         const spaceBelow = window.innerHeight - rect.top
         setAvailableHeight(spaceBelow - 40 + "px")
-        console.log("Available height:", spaceBelow - 40 + "px")
 
         const spaceRight = window.innerWidth - rect.left
         setAvailableWidth(spaceRight - 40 + "px")
@@ -125,7 +136,6 @@ export default function InsertionPanel({
     invokeGetFakerMethods()
       .then((methods) => {
         setFakerMethods(methods)
-        console.log("Faker methods fetched:", methods)
       })
       .catch((error) => {
         console.error("Error fetching faker methods:", error)
@@ -138,19 +148,22 @@ export default function InsertionPanel({
 
   useEffect(() => {
     getTableData()
+    setColumnSpecs({})
   }, [activeTable])
 
   useEffect(() => {
     if (!tableContainerRef.current) return
+
     if (activeTab === "insert" || activeTab === "preview") {
-      console.log("Scrolling to top of preview")
       tableContainerRef.current.scrollTo({
         top: 0,
         left: 0,
         behavior: "smooth",
       })
-    } else if (activeTab === "log") {
-      setTimeout(() => {
+    }
+
+    if (activeTab === "log") {
+      requestAnimationFrame(() => {
         if (tableContainerRef.current) {
           tableContainerRef.current.scrollTo({
             top: tableContainerRef.current.scrollHeight,
@@ -160,29 +173,32 @@ export default function InsertionPanel({
         }
       })
     }
-  }, [activeTab, activeTable])
+  }, [activeTab, activeTable, logs])
 
   useEffect(() => {
-    if (activeTab === "preview") {
-      invokeVerifySpec({
-        name: "user",
-        columns: [
-          {
-            name: "id",
-            nullChance: 0.1,
-            method: "uuid4",
-            type: "faker",
-          },
-        ],
-      })
-        .then((res) => {
-          console.log("Spec verified:", res)
-        })
-        .catch((error) => {
-          console.error("Error verifying spec:", error)
-        })
+    if (activeTab === "preview" && (!tablePackets || pendingRefresh)) {
+      verifyTableSpec()
     }
   }, [activeTab])
+
+  useEffect(() => {
+    setPendingRefresh(true)
+  }, [columnSpecs])
+
+  function verifyTableSpec() {
+    const tableSpec = {
+      name: tableData?.name || "",
+      columns: Object.values(columnSpecs) as ColumnSpec[],
+    }
+    invokeVerifySpec(tableSpec)
+      .then((res) => {
+        setTablePackets(res)
+        console.log("Spec verified:", res)
+      })
+      .catch((error) => {
+        console.error("Error verifying spec:", error)
+      })
+  }
 
   function getTimeOfDay() {
     const hour = new Date().getHours()
@@ -203,7 +219,6 @@ export default function InsertionPanel({
     invokeTableData(activeTable)
       .then((res) => {
         setTableData(res)
-        console.log("Table data fetched:", res)
       })
       .catch((error) => {
         console.error("Error fetching table data:", error)
@@ -241,7 +256,7 @@ export default function InsertionPanel({
             <div>
               <div className="mb-2 flex items-center space-x-2">
                 <h2 className="text-2xl font-semibold tracking-wide">
-                  {activeTable}
+                  {tableData?.name || "Loading..."}
                 </h2>
                 <Icon
                   key={activeTable}
@@ -308,17 +323,16 @@ export default function InsertionPanel({
       </div>
       <div className="flex h-full w-full flex-col overflow-hidden rounded rounded-tr-none border">
         {tableData && tableData.columns ? (
-          activeTab === "insert" ? (
-            <div
-              className="h-full w-full overflow-auto"
-              ref={tableContainerRef}
-            >
+          <div className="h-full w-full overflow-auto" ref={tableContainerRef}>
+            <div className={cn(activeTab !== "insert" && "hidden")}>
               <Table>
                 <TableBody>
                   {tableData.columns.map((column) => (
                     <DBColumn
                       key={column.name}
                       column={column}
+                      columnSpecs={columnSpecs}
+                      setColumnSpecs={setColumnSpecs}
                       fakerMethods={fakerMethods}
                       uniques={tableData.uniques}
                       hoveredGroup={hoveredGroup}
@@ -328,52 +342,17 @@ export default function InsertionPanel({
                 </TableBody>
               </Table>
             </div>
-          ) : activeTab === "preview" ? (
-            <div
-              className="h-full w-full overflow-auto"
-              ref={tableContainerRef}
-            >
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    {tableData.columns.map((column) => (
-                      <TableHead key={column.name}>{column.name}</TableHead>
-                    ))}
-                  </TableRow>
-                </TableHeader>
-
-                {/* <TableBody> */}
-
-                {/* </TableBody> */}
-              </Table>
+            <div className={cn(activeTab !== "preview" && "hidden", "h-full w-full")}>
+              <RenderPreview
+                tableData={tableData}
+                tablePackets={tablePackets}
+                onRefresh={verifyTableSpec}
+              />
             </div>
-          ) : (
-            <div
-              className="flex h-full w-full flex-col overflow-auto p-4"
-              ref={tableContainerRef}
-            >
-              <div className="mt-auto">
-                {logs
-                  .slice()
-                  .reverse()
-                  .map((log, index) => (
-                    <p
-                      key={index}
-                      className={cn(
-                        "text-sm text-muted-foreground",
-                        index === logs.length - 1 &&
-                          "font-medium text-slate-400"
-                      )}
-                    >
-                      {log}
-                    </p>
-                  ))}
-                {Array.from({ length: 4 }).map((_, index) => (
-                  <br key={index} />
-                ))}
-              </div>
+            <div className={cn(activeTab !== "log" && "hidden")}>
+              <RenderLogs logs={logs} />
             </div>
-          )
+          </div>
         ) : (
           <div className="flex h-full w-full items-center justify-center">
             <Icon
@@ -387,8 +366,87 @@ export default function InsertionPanel({
   )
 }
 
+interface RenderLogsProps {
+  logs: string[]
+}
+
+function RenderLogs({ logs }: RenderLogsProps) {
+  return (
+    <div className="m-4 mt-auto">
+      {logs
+        .slice()
+        .reverse()
+        .map((log, index) => (
+          <p
+            key={index}
+            className={cn(
+              "text-sm text-muted-foreground",
+              index === logs.length - 1 && "font-medium text-slate-400"
+            )}
+          >
+            {log}
+          </p>
+        ))}
+      {Array.from({ length: 4 }).map((_, index) => (
+        <br key={index} />
+      ))}
+    </div>
+  )
+}
+
+interface RenderPreviewProps {
+  tableData: TableData
+  tablePackets: TablePacket | null
+  onRefresh: () => void
+}
+
+function RenderPreview({
+  tableData,
+  tablePackets,
+  onRefresh,
+}: RenderPreviewProps) {
+  return (
+    <div className="flex min-h-full flex-col">
+      <Table className="flex-shrink-0">
+        <TableHeader>
+          <TableRow>
+            {tableData.columns.map((column) => (
+              <TableHead key={column.name}>{column.name}</TableHead>
+            ))}
+          </TableRow>
+        </TableHeader>
+        <TableBody>
+          {tablePackets &&
+            tablePackets.columns.map((col) => (
+              <TableCell
+                key={col.name}
+                className="w-[50px] overflow-x-auto whitespace-nowrap"
+              >
+                <div className="max-w-full overflow-x-auto">
+                  {col.value ?? "NULL"}
+                </div>
+              </TableCell>
+            ))}
+        </TableBody>
+      </Table>
+
+      <div className="sticky bottom-0 mt-auto flex items-center justify-center bg-muted p-2">
+        <button
+          className="inline-flex items-center space-x-2 rounded-md border px-3 py-2 text-sm font-medium hover:bg-accent hover:text-accent-foreground"
+          onClick={onRefresh}
+        >
+          <Icon icon="ri:dice-6-fill" className="h-4 w-4 text-violet-500" />
+          <span>Refresh</span>
+        </button>
+      </div>
+    </div>
+  )
+}
+
 interface DBColumnProps {
   column: ColumnData
+  columnSpecs: Record<string, ColumnSpec>
+  setColumnSpecs: Dispatch<SetStateAction<Record<string, ColumnSpec>>>
   hoveredGroup: string[] | null
   setHoveredGroup: (group: string[] | null) => void
   uniques: string[][]
@@ -397,12 +455,14 @@ interface DBColumnProps {
 
 function DBColumn({
   column,
+  columnSpecs,
+  setColumnSpecs,
   uniques,
   fakerMethods,
   hoveredGroup,
   setHoveredGroup,
 }: DBColumnProps) {
-  const [baseSelect, setBaseSelect] = useState("faker")
+  const [baseSelect, setBaseSelect] = useState<BaseSelectType>("faker")
   const [advancedSelect, setAdvanceSelect] = useState<string | null>(null)
   const [nullProbability, setNullProbability] = useState(0)
 
@@ -422,6 +482,39 @@ function DBColumn({
             : thisGroups.length > 0
               ? "is unique"
               : ""
+
+  function updateColumnSpec() {
+    setColumnSpecs((prev) => {
+      const specs = { ...(prev ?? {}) }
+
+      if (!specs[column.name]) {
+        specs[column.name] = {
+          name: column.name,
+          nullChance: 0,
+          method: null,
+          type: "faker",
+        }
+      }
+
+      specs[column.name].nullChance = nullProbability * 10
+      specs[column.name].type = baseSelect
+      specs[column.name].method = advancedSelect
+
+      return specs
+    })
+  }
+
+  useEffect(() => {
+    updateColumnSpec()
+  }, [baseSelect, advancedSelect, nullProbability])
+
+  useEffect(() => {
+    if (columnSpecs[column.name]) {
+      setBaseSelect(columnSpecs[column.name].type)
+      setAdvanceSelect(columnSpecs[column.name].method)
+      setNullProbability(columnSpecs[column.name].nullChance / 10)
+    }
+  }, [])
 
   return (
     <TableRow
@@ -448,60 +541,11 @@ function DBColumn({
       <TableCell>{column.type}</TableCell>
 
       <TableCell>
-        <div
-          className="w-[100px]"
-          title={
-            nullReason || `${nullProbability}% inserted values will be null`
-          }
-        >
-          <Popover>
-            <PopoverTrigger asChild>
-              <div className="flex items-center">
-                <Icon
-                  icon="tabler:salt"
-                  className={cn(
-                    "mr-2 h-4 w-4",
-                    nullReason
-                      ? "cursor-not-allowed text-stone-500"
-                      : "cursor-pointer"
-                  )}
-                />
-                <Badge
-                  variant={nullProbability > 0 ? "outline" : "secondary"}
-                  className={cn(
-                    nullReason
-                      ? "cursor-not-allowed text-muted-foreground"
-                      : "cursor-pointer"
-                  )}
-                  onClick={(e) => {
-                    if (nullReason) return
-                    e.stopPropagation()
-                    e.preventDefault()
-                    setNullProbability((prev) =>
-                      prev === 0 ? 1 : prev === 1 ? 5 : prev == 5 ? 10 : 0
-                    )
-                  }}
-                >
-                  {nullProbability}%
-                </Badge>
-              </div>
-            </PopoverTrigger>
-            <PopoverContent className="w-44 bg-popover text-sm font-semibold">
-              <label className="mb-2 block">
-                Chance of null: {nullProbability}%
-              </label>
-              <input
-                type="range"
-                min={0}
-                max={100}
-                value={nullProbability}
-                onChange={(e) => setNullProbability(Number(e.target.value))}
-                className="w-full"
-                disabled={Boolean(nullReason)}
-              />
-            </PopoverContent>
-          </Popover>
-        </div>
+        <RenderNullChanceControl
+          nullReason={nullReason}
+          nullProbability={nullProbability}
+          setNullProbability={setNullProbability}
+        />
       </TableCell>
 
       <TableCell>
@@ -526,36 +570,122 @@ function DBColumn({
   )
 }
 
+interface RenderNullChanceControlProps {
+  nullReason: string
+  nullProbability: number
+  setNullProbability: Dispatch<SetStateAction<number>>
+}
+
+function RenderNullChanceControl({
+  nullReason,
+  nullProbability,
+  setNullProbability,
+}: RenderNullChanceControlProps) {
+  return (
+    <div
+      className="w-[100px]"
+      title={nullReason || `${nullProbability}% inserted values will be null`}
+    >
+      <Popover>
+        <PopoverTrigger asChild>
+          <div className="flex items-center">
+            <Icon
+              icon="tabler:salt"
+              className={cn(
+                "mr-2 h-4 w-4",
+                nullReason
+                  ? "cursor-not-allowed text-stone-500"
+                  : "cursor-pointer"
+              )}
+            />
+            <Badge
+              variant={nullProbability > 0 ? "outline" : "secondary"}
+              className={cn(
+                nullReason
+                  ? "cursor-not-allowed text-muted-foreground"
+                  : "cursor-pointer"
+              )}
+              onClick={(e) => {
+                if (nullReason) return
+                e.stopPropagation()
+                e.preventDefault()
+                setNullProbability((prev) =>
+                  prev === 0 ? 1 : prev === 1 ? 5 : prev == 5 ? 10 : 0
+                )
+              }}
+            >
+              {nullProbability}%
+            </Badge>
+          </div>
+        </PopoverTrigger>
+        <PopoverContent className="w-44 bg-popover text-sm font-semibold">
+          <label className="mb-2 block">
+            Chance of null: {nullProbability}%
+          </label>
+          <input
+            type="range"
+            min={0}
+            max={100}
+            value={nullProbability}
+            onChange={(e) => setNullProbability(Number(e.target.value))}
+            className="w-full"
+            disabled={Boolean(nullReason)}
+          />
+        </PopoverContent>
+      </Popover>
+    </div>
+  )
+}
+
 interface BaseFillSelectProps {
-  selected: string
-  setSelected: (view: string) => void
+  selected: BaseSelectType
+  setSelected: (view: BaseSelectType) => void
   column: ColumnData
 }
 
 function BaseFillSelect({
-  selected: view,
-  setSelected: setView,
+  selected,
+  setSelected,
   column,
 }: BaseFillSelectProps) {
+  type view =
+    | "faker"
+    | "regex"
+    | "foreign"
+    | "autoincrement"
+    | "computed"
+    | "python"
+
   const [selectDisabled, setSelectDisabled] = useState(false)
+  const [baseView, setBaseView] = useState<view>("faker")
+
   useEffect(() => {
     if (column?.foreignKeys?.table) {
-      console.log("Foreign key detected:", column.foreignKeys, column.name)
-      setView("foreign")
+      setBaseView("foreign")
       setSelectDisabled(true)
     } else if (column.autoincrement) {
-      console.log("Auto increment detected:", column.name)
-      setView("autoincrement")
+      setBaseView("autoincrement")
+      setSelectDisabled(true)
+    } else if (column.computed) {
+      setBaseView("computed")
       setSelectDisabled(true)
     } else if (column.type.includes("VARCHAR")) {
-      setView("faker")
+      setBaseView("faker")
     } else {
-      setView("regex")
+      setBaseView("faker")
     }
   }, [])
 
+  useEffect(() => {
+    if (baseView === "autoincrement" || baseView === "computed") {
+      setSelected("auto")
+    } else {
+      setSelected(baseView as BaseSelectType)
+    }
+  }, [baseView])
+
   return (
-    <Select value={view} onValueChange={setView}>
+    <Select value={baseView} onValueChange={(val) => setBaseView(val as view)}>
       <SelectTrigger className="w-[180px]" disabled={selectDisabled}>
         <SelectValue placeholder="Choose view" />
       </SelectTrigger>
@@ -620,15 +750,6 @@ function BaseFillSelect({
                 Py Script
               </div>
             </SelectItem>
-            <SelectItem value="sql">
-              <div className="flex items-center">
-                <Icon
-                  icon="ph:file-sql"
-                  className="mr-2 h-4 w-4 text-violet-400"
-                />
-                SQL Script
-              </div>
-            </SelectItem>
           </>
         )}
       </SelectContent>
@@ -652,16 +773,17 @@ function AdvancedFillSelect({
   fakerMethods,
 }: AdvancedFillSelectProps) {
   const [open, setOpen] = useState(false)
-  const [highlighted, setHighlighted] = useState<string>("")
-  const [focused, setFocused] = useState(false)
   const { theme } = useTheme()
 
-  // useEffect(() => {
-  //   if (selected) {
-  //     se
-
-  //   }
-  // }, [selected])
+  useEffect(() => {
+    if (!selected) {
+      if (baseSelect === "faker") {
+        setSelected(fakerMethods?.[0] || null)
+      } else {
+        setSelected(null)
+      }
+    }
+  }, [baseSelect])
 
   return baseSelect === "faker" ? (
     <Popover open={open} onOpenChange={setOpen}>
@@ -729,8 +851,6 @@ function AdvancedFillSelect({
         value={selected ?? ""}
         extensions={[EditorView.lineWrapping]}
         theme={theme === "light" ? githubLight : githubDark}
-        onFocus={() => setFocused(true)}
-        onBlur={() => setFocused(false)}
         height="auto"
         minHeight="35px"
         maxHeight="200px"
@@ -748,8 +868,6 @@ function AdvancedFillSelect({
         value={selected ?? ""}
         extensions={[python(), EditorView.lineWrapping]}
         theme={theme === "light" ? githubLight : githubDark}
-        onFocus={() => setFocused(true)}
-        onBlur={() => setFocused(false)}
         height="auto"
         minHeight="35px"
         maxHeight="200px"
@@ -767,8 +885,6 @@ function AdvancedFillSelect({
         placeholder={"-- SQL expression"}
         extensions={[sql(), EditorView.lineWrapping]}
         theme={theme === "light" ? githubLight : githubDark}
-        onFocus={() => setFocused(true)}
-        onBlur={() => setFocused(false)}
         height="auto"
         minHeight="35px"
         maxHeight="200px"

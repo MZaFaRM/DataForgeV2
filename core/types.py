@@ -20,6 +20,7 @@ class ColumnMetadata(BaseModel):
 
 
 class TableMetadata(BaseModel):
+    name: str
     uniques: list[tuple[str, ...]]
     parents: list[str]
     columns: list[ColumnMetadata]

@@ -47,7 +47,6 @@ export default function ConnectionStatus({
   const [menuWidth, setMenuWidth] = useState<number | null>(null)
 
   function fetchDbInfo() {
-    console.log("Fetching DB info...")
     setDbConnecting(true)
 
     invokeDbInfo().then((payload) => {
@@ -62,7 +61,6 @@ export default function ConnectionStatus({
   }
 
   function initiateDbConnection() {
-    console.log("Initiating DB connection...")
     setDbConnecting(true)
 
     invokeDbConnection({
@@ -110,7 +108,6 @@ export default function ConnectionStatus({
   }
 
   function handleDisconnect() {
-    console.log("Disconnecting from DB...")
     invokeDbDisconnect()
       .then(() => {
         setDbInfo(null)

@@ -32,6 +32,7 @@ export interface ColumnData {
 }
 
 export interface TableData {
+  name: string
   uniques: string[][]
   parents: string[]
   columns: ColumnData[]
@@ -52,11 +53,13 @@ export interface DataPackage {
   inserted: boolean
 }
 
+export type BaseSelectType = "faker" | "regex" | "foreign" | "auto" | "python"
+
 export interface ColumnSpec {
   name: string
   nullChance: number
   method: string | null
-  type: "faker" | "regex" | "foreign" | "auto"
+  type: BaseSelectType
 }
 
 export interface TableSpec {

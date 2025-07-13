@@ -27,7 +27,7 @@ class Runner:
             try:
                 req = json.loads(line)
                 req = Request(**req)
-                res = self.handle_command(req)
+                res = json.dumps(self.handle_command(req))
             except Exception as e:
                 res = Response(
                     status="error",
@@ -35,7 +35,7 @@ class Runner:
                     traceback=traceback.format_exc(),
                 ).to_dict()
             finally:
-                print(json.dumps(res), flush=True)
+                print(res, flush=True)
 
     def handle_command(self, command: Request) -> dict:
         try:

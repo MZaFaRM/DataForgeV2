@@ -61,18 +61,23 @@ export interface ColumnSpec {
   method: string | null
   type: BaseSelectType
 }
-
 export interface TableSpec {
   name: string
+  noOfEntries: number
   columns: ColumnSpec[]
 }
 
-export interface ColumnPacket {
+export type ColumnSpecMap = Record<string, ColumnSpec>
+export interface TableSpecEntry {
   name: string
-  value: string | null
+  noOfEntries: number
+  columns: ColumnSpecMap
 }
+
+export type TableSpecMap = Record<string, TableSpecEntry>
 
 export interface TablePacket {
   name: string
-  columns: ColumnPacket[]
+  columns: string[]
+  entries: string[][]
 }

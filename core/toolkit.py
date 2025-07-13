@@ -21,7 +21,7 @@ from sqlalchemy.sql.schema import Column
 
 from core.types import (
     ColumnMetadata,
-    ColumnPacket,
+    ErrorPacket,
     ForeignKeyRef,
     TableMetadata,
     TablePacket,
@@ -338,12 +338,17 @@ class Populator:
     def verify_dataset(self, db: DatabaseManager, table_spec: TableSpec) -> TablePacket:
         metadata = db.get_table_metadata(table_spec.name)
         columns = {c.name: c for c in metadata.columns}
-        table_packet = TablePacket(name=table_spec.name, columns=[])
+        table_packet = TablePacket(
+            name=table_spec.name,
+            columns=[c.name for c in table_spec.columns],
+            entries=[[""] * table_spec.no_of_entries] * len(table_spec.columns),
+            errors=[],
+        )
 
         single_uniques = {u[0] for u in metadata.uniques if len(u) == 1}
         # multi_uniques = [u for u in metadata.uniques if len(u) > 1]  # Not used yet
 
-        for col in table_spec.columns:
+        for ci, col in enumerate(table_spec.columns):
             if col.method is None:
                 continue
 
@@ -364,14 +369,26 @@ class Populator:
                     )
                     forbidden = set(row[0] for row in result)
 
-            # Generate value (retry if in forbidden)
-            value = method_fn(columns, col)
-            while forbidden and value in forbidden:
-                forbidden.remove(value)
-                value = method_fn(columns, col)
-
-            table_packet.columns.append(ColumnPacket(name=col.name, value=str(value)))
-
+            for ri in range(table_spec.no_of_entries):
+                try:
+                    # Generate value (retry if in forbidden)
+                    value = method_fn(columns, col)
+                    while value in forbidden:
+                        forbidden.remove(value)
+                        value = method_fn(columns, col)
+                        if not forbidden:
+                            raise ValueError(
+                                f"No value could be generated for column '{col.name}'."
+                            )
+                    table_packet.entries[ci][ri] = str(value)
+                except Exception as e:
+                    table_packet.errors.append(
+                        ErrorPacket(
+                            specific=str(e),
+                            column=col.name,
+                        )
+                    )
+                    break
         return table_packet
 
     def get_processing_method(self, col) -> Callable:

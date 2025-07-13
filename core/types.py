@@ -33,16 +33,20 @@ class ColumnSpec(BaseModel):
     type: Literal["faker", "regex", "foreign", "auto"]
 
 
-class ColumnPacket(BaseModel):
-    name: str
-    value: Optional[str] = None
-
-
 class TableSpec(BaseModel):
     name: str
+    no_of_entries: int
     columns: list[ColumnSpec]
+
+
+class ErrorPacket(BaseModel):
+    generic: Optional[str] = None
+    specific: Optional[str] = None
+    column: Optional[str] = None
 
 
 class TablePacket(BaseModel):
     name: str
-    columns: list[ColumnPacket]
+    columns: list[str]
+    entries: list[list[str]]
+    errors: list[ErrorPacket]

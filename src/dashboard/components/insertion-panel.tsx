@@ -1,3 +1,4 @@
+import { log } from "console"
 import { Dispatch, SetStateAction, useEffect, useRef, useState } from "react"
 import { invokeTableData } from "@/api/db"
 import { invokeGetFakerMethods, invokeVerifySpec } from "@/api/fill"
@@ -5,11 +6,9 @@ import { python } from "@codemirror/lang-python"
 import { sql } from "@codemirror/lang-sql"
 import { Icon } from "@iconify/react"
 import { CaretSortIcon, CheckIcon } from "@radix-ui/react-icons"
-import { getCurrentWindow } from "@tauri-apps/api/window"
 import { githubDark, githubLight } from "@uiw/codemirror-theme-github"
 import CodeMirror, { EditorView } from "@uiw/react-codemirror"
 import { set } from "date-fns"
-import { ta, tr } from "date-fns/locale"
 import { useTheme } from "next-themes"
 
 import { cn } from "@/lib/utils"
@@ -26,10 +25,8 @@ import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
-  DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
-import { Input } from "@/components/ui/input"
 import {
   Popover,
   PopoverContent,
@@ -45,23 +42,22 @@ import {
 import {
   Table,
   TableBody,
-  TableCaption,
   TableCell,
-  TableFooter,
   TableHead,
   TableHeader,
   TableRow,
 } from "@/components/ui/table"
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import {
   BaseSelectType,
   ColumnData,
   ColumnSpec,
+  ColumnSpecMap,
   DataPackage,
   DbData,
   TableData,
   TablePacket,
   TableSpec,
+  TableSpecMap,
 } from "@/components/types"
 
 interface ListTablesProps {
@@ -76,7 +72,10 @@ export default function InsertionPanel({
   setActiveTable,
 }: ListTablesProps) {
   const ref = useRef<HTMLDivElement>(null)
-  const tableContainerRef = useRef<HTMLDivElement>(null)
+  const insertTabRef = useRef<HTMLDivElement>(null)
+  const previewTabRef = useRef<HTMLDivElement>(null)
+  const logTabRef = useRef<HTMLDivElement>(null)
+
   const [availableHeight, setAvailableHeight] = useState("")
   const [availableWidth, setAvailableWidth] = useState("")
   const [timeOfDay, setTimeOfDay] = useState<
@@ -86,7 +85,7 @@ export default function InsertionPanel({
   const [fakerMethods, setFakerMethods] = useState<string[]>([])
   const [hoveredGroup, setHoveredGroup] = useState<string[] | null>(null)
   const [activeTab, setActiveTab] = useState<string>("insert")
-  const [columnSpecs, setColumnSpecs] = useState<Record<string, ColumnSpec>>({})
+  const [globalSpecs, setGlobalSpecs] = useState<TableSpecMap>({})
   const [tablePackets, setTablePackets] = useState<TablePacket | null>(null)
   const [pendingRefresh, setPendingRefresh] = useState(false)
   const [logs, setLogs] = useState<string[]>([
@@ -147,33 +146,58 @@ export default function InsertionPanel({
   }, [])
 
   useEffect(() => {
-    getTableData()
-    setColumnSpecs({})
-  }, [activeTable])
+    setActiveTab("insert")
 
-  useEffect(() => {
-    if (!tableContainerRef.current) return
+    async function fetchAndInit() {
+      const table = await getTableData()
+      if (!table) return
 
-    if (activeTab === "insert" || activeTab === "preview") {
-      tableContainerRef.current.scrollTo({
-        top: 0,
-        left: 0,
-        behavior: "smooth",
-      })
-    }
+      setTableData(table)
 
-    if (activeTab === "log") {
-      requestAnimationFrame(() => {
-        if (tableContainerRef.current) {
-          tableContainerRef.current.scrollTo({
-            top: tableContainerRef.current.scrollHeight,
-            left: 0,
-            behavior: "smooth",
-          })
+      setGlobalSpecs((prev) => {
+        if (prev[table.name]) return prev
+
+        const columnSpecMap = table.columns.reduce((acc, col) => {
+          acc[col.name] = {
+            name: col.name,
+            nullChance: 0,
+            method: null,
+            type: "faker",
+          }
+          return acc
+        }, {} as ColumnSpecMap)
+
+        return {
+          ...prev,
+          [table.name]: {
+            name: table.name,
+            noOfEntries: 50,
+            columns: columnSpecMap,
+          },
         }
       })
     }
-  }, [activeTab, activeTable, logs])
+
+    fetchAndInit()
+  }, [activeTable])
+
+  useEffect(() => {
+    insertTabRef.current?.scrollTo({
+      top: 0,
+      left: 0,
+      behavior: "smooth",
+    })
+    previewTabRef.current?.scrollTo({
+      top: 0,
+      left: 0,
+      behavior: "smooth",
+    })
+    logTabRef.current?.scrollTo({
+      top: logTabRef.current.scrollHeight,
+      left: 0,
+      behavior: "smooth",
+    })
+  }, [activeTable])
 
   useEffect(() => {
     if (activeTab === "preview" && (!tablePackets || pendingRefresh)) {
@@ -181,14 +205,13 @@ export default function InsertionPanel({
     }
   }, [activeTab])
 
-  useEffect(() => {
-    setPendingRefresh(true)
-  }, [columnSpecs])
-
   function verifyTableSpec() {
-    const tableSpec = {
-      name: tableData?.name || "",
-      columns: Object.values(columnSpecs) as ColumnSpec[],
+    if (!activeTable) return
+
+    const tableSpec: TableSpec = {
+      name: activeTable,
+      noOfEntries: globalSpecs[activeTable]?.noOfEntries,
+      columns: Object.values(globalSpecs[activeTable]?.columns) as ColumnSpec[],
     }
     invokeVerifySpec(tableSpec)
       .then((res) => {
@@ -198,6 +221,12 @@ export default function InsertionPanel({
       .catch((error) => {
         console.error("Error verifying spec:", error)
       })
+
+    previewTabRef.current?.scrollTo({
+      top: 0,
+      left: 0,
+      behavior: "smooth",
+    })
   }
 
   function getTimeOfDay() {
@@ -211,19 +240,17 @@ export default function InsertionPanel({
     })
   }
 
-  function getTableData() {
-    if (!dbData || !dbData.connected || !activeTable) {
+  async function getTableData(): Promise<TableData | null> {
+    if (!dbData || !dbData.connected || !activeTable) return null
+    try {
+      const res = await invokeTableData(activeTable)
+      setTableData(res)
+      return res
+    } catch (err) {
+      console.error("Error fetching table data:", err)
       setTableData(null)
-      return
+      return null
     }
-    invokeTableData(activeTable)
-      .then((res) => {
-        setTableData(res)
-      })
-      .catch((error) => {
-        console.error("Error fetching table data:", error)
-        setTableData(null)
-      })
   }
 
   return (
@@ -322,17 +349,41 @@ export default function InsertionPanel({
         </div>
       </div>
       <div className="flex h-full w-full flex-col overflow-hidden rounded rounded-tr-none border">
-        {tableData && tableData.columns ? (
-          <div className="h-full w-full overflow-auto" ref={tableContainerRef}>
-            <div className={cn(activeTab !== "insert" && "hidden")}>
+        {tableData && tableData.columns && globalSpecs[tableData.name] ? (
+          <div className="h-full w-full">
+            <div
+              ref={insertTabRef}
+              className={cn(
+                "h-full w-full overflow-auto",
+                activeTab !== "insert" && "hidden"
+              )}
+            >
               <Table>
                 <TableBody>
                   {tableData.columns.map((column) => (
                     <DBColumn
-                      key={column.name}
+                      key={`${tableData.name}-${column.name}`}
                       column={column}
-                      columnSpecs={columnSpecs}
-                      setColumnSpecs={setColumnSpecs}
+                      columnSpec={
+                        (globalSpecs[tableData.name]?.columns[
+                          column.name
+                        ] as ColumnSpec) ?? {}
+                      }
+                      setColumnSpec={(newSpec) =>
+                        setGlobalSpecs((prev) => {
+                          const table = tableData.name
+                          return {
+                            ...prev,
+                            [table]: {
+                              ...prev?.[table],
+                              columns: {
+                                ...prev?.[table]?.columns,
+                                [column.name]: newSpec,
+                              },
+                            },
+                          }
+                        })
+                      }
                       fakerMethods={fakerMethods}
                       uniques={tableData.uniques}
                       hoveredGroup={hoveredGroup}
@@ -342,14 +393,38 @@ export default function InsertionPanel({
                 </TableBody>
               </Table>
             </div>
-            <div className={cn(activeTab !== "preview" && "hidden", "h-full w-full")}>
+            <div
+              ref={previewTabRef}
+              className={cn(
+                activeTab !== "preview" && "hidden",
+                "h-full w-full overflow-auto"
+              )}
+            >
               <RenderPreview
                 tableData={tableData}
                 tablePackets={tablePackets}
-                onRefresh={verifyTableSpec}
+                doRefresh={verifyTableSpec}
+                noOfRows={globalSpecs[tableData.name]?.noOfEntries}
+                setNoOfRows={(rows) =>
+                  setGlobalSpecs((prev) => {
+                    return {
+                      ...prev,
+                      [tableData.name]: {
+                        ...prev?.[tableData.name],
+                        noOfEntries: rows,
+                      },
+                    }
+                  })
+                }
               />
             </div>
-            <div className={cn(activeTab !== "log" && "hidden")}>
+            <div
+              ref={logTabRef}
+              className={cn(
+                "h-full w-full overflow-auto",
+                activeTab !== "log" && "hidden"
+              )}
+            >
               <RenderLogs logs={logs} />
             </div>
           </div>
@@ -397,47 +472,117 @@ function RenderLogs({ logs }: RenderLogsProps) {
 interface RenderPreviewProps {
   tableData: TableData
   tablePackets: TablePacket | null
-  onRefresh: () => void
+  doRefresh: () => void
+  noOfRows: number
+  setNoOfRows: (rows: number) => void
 }
 
 function RenderPreview({
   tableData,
   tablePackets,
-  onRefresh,
+  doRefresh,
+  noOfRows,
+  setNoOfRows,
 }: RenderPreviewProps) {
+  const [dice, setDice] = useState<number>(1)
+
+  function shuffleDice() {
+    const MaxRolls = 5
+    let rollCount = 0
+    const intervalID = setInterval(() => {
+      let val = Math.floor(Math.random() * 6) + 1
+      setDice(val)
+      rollCount++
+      if (rollCount >= MaxRolls) {
+        clearInterval(intervalID)
+      }
+    }, 500)
+  }
+
   return (
     <div className="flex min-h-full flex-col">
       <Table className="flex-shrink-0">
         <TableHeader>
           <TableRow>
-            {tableData.columns.map((column) => (
-              <TableHead key={column.name}>{column.name}</TableHead>
-            ))}
+            {tablePackets &&
+              tablePackets.columns.map((column) => (
+                <TableHead key={column}>{column}</TableHead>
+              ))}
           </TableRow>
         </TableHeader>
         <TableBody>
           {tablePackets &&
-            tablePackets.columns.map((col) => (
-              <TableCell
-                key={col.name}
-                className="w-[50px] overflow-x-auto whitespace-nowrap"
-              >
-                <div className="max-w-full overflow-x-auto">
-                  {col.value ?? "NULL"}
-                </div>
-              </TableCell>
-            ))}
+            Array.from({ length: tablePackets.entries?.[0].length }).map(
+              (_, colIndex) => (
+                <TableRow key={`${tablePackets.name}.${colIndex}`}>
+                  {Array.from({ length: tablePackets.entries.length }).map(
+                    (_, rowIndex) => (
+                      <TableCell
+                        key={`${tablePackets.name}.${colIndex}.${rowIndex}`}
+                        className="w-[50px] overflow-x-auto whitespace-nowrap"
+                      >
+                        <div className="max-w-full overflow-x-auto">
+                          {tablePackets.entries[rowIndex][colIndex]}
+                        </div>
+                      </TableCell>
+                    )
+                  )}
+                </TableRow>
+              )
+            )}
         </TableBody>
       </Table>
 
       <div className="sticky bottom-0 mt-auto flex items-center justify-center bg-muted p-2">
         <button
           className="inline-flex items-center space-x-2 rounded-md border px-3 py-2 text-sm font-medium hover:bg-accent hover:text-accent-foreground"
-          onClick={onRefresh}
+          onClick={() => {
+            shuffleDice()
+            doRefresh()
+          }}
         >
-          <Icon icon="ri:dice-6-fill" className="h-4 w-4 text-violet-500" />
+          {Array.from({ length: 7 }).map((_, i) => (
+            <Icon
+              key={i}
+              icon={`bxs:dice-${i}`}
+              className={cn(
+                "h-4 w-4 text-violet-500",
+                dice === i ? "animate-spin" : "hidden"
+              )}
+            />
+          ))}
           <span>Refresh</span>
         </button>
+        <div>
+          <Popover onOpenChange={(open) => !open && doRefresh()}>
+            <PopoverTrigger asChild>
+              <div
+                className={cn(
+                  "inline-flex items-center space-x-2 rounded-md border px-3 py-2",
+                  "text-sm font-medium hover:bg-accent hover:text-accent-foreground",
+                  "ml-4"
+                )}
+              >
+                <Icon
+                  icon="material-symbols:add-row-below"
+                  className={cn("h-4 w-4 text-white")}
+                />
+                <span>{noOfRows} Rows</span>
+              </div>
+            </PopoverTrigger>
+            <PopoverContent className="w-44 bg-popover text-sm font-semibold">
+              <label className="mb-2 block text-center">Rows: {noOfRows}</label>
+              <input
+                type="range"
+                min={1}
+                max={1000}
+                value={noOfRows}
+                onChange={(e) => setNoOfRows(Number(e.target.value))}
+                className="w-full"
+              />
+            </PopoverContent>
+          </Popover>
+        </div>
       </div>
     </div>
   )
@@ -445,8 +590,8 @@ function RenderPreview({
 
 interface DBColumnProps {
   column: ColumnData
-  columnSpecs: Record<string, ColumnSpec>
-  setColumnSpecs: Dispatch<SetStateAction<Record<string, ColumnSpec>>>
+  columnSpec: ColumnSpec
+  setColumnSpec: (newSpec: ColumnSpec) => void
   hoveredGroup: string[] | null
   setHoveredGroup: (group: string[] | null) => void
   uniques: string[][]
@@ -455,8 +600,8 @@ interface DBColumnProps {
 
 function DBColumn({
   column,
-  columnSpecs,
-  setColumnSpecs,
+  columnSpec,
+  setColumnSpec,
   uniques,
   fakerMethods,
   hoveredGroup,
@@ -483,36 +628,20 @@ function DBColumn({
               ? "is unique"
               : ""
 
-  function updateColumnSpec() {
-    setColumnSpecs((prev) => {
-      const specs = { ...(prev ?? {}) }
-
-      if (!specs[column.name]) {
-        specs[column.name] = {
-          name: column.name,
-          nullChance: 0,
-          method: null,
-          type: "faker",
-        }
-      }
-
-      specs[column.name].nullChance = nullProbability * 10
-      specs[column.name].type = baseSelect
-      specs[column.name].method = advancedSelect
-
-      return specs
-    })
-  }
-
   useEffect(() => {
-    updateColumnSpec()
+    setColumnSpec({
+      name: column.name,
+      nullChance: nullProbability / 10,
+      method: advancedSelect,
+      type: baseSelect,
+    })
   }, [baseSelect, advancedSelect, nullProbability])
 
   useEffect(() => {
-    if (columnSpecs[column.name]) {
-      setBaseSelect(columnSpecs[column.name].type)
-      setAdvanceSelect(columnSpecs[column.name].method)
-      setNullProbability(columnSpecs[column.name].nullChance / 10)
+    if (columnSpec) {
+      setBaseSelect(columnSpec.type)
+      setAdvanceSelect(columnSpec.method)
+      setNullProbability(columnSpec.nullChance / 10)
     }
   }, [])
 
@@ -643,11 +772,7 @@ interface BaseFillSelectProps {
   column: ColumnData
 }
 
-function BaseFillSelect({
-  selected,
-  setSelected,
-  column,
-}: BaseFillSelectProps) {
+function BaseFillSelect({ setSelected, column }: BaseFillSelectProps) {
   type view =
     | "faker"
     | "regex"

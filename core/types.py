@@ -16,12 +16,15 @@ class ColumnMetadata(BaseModel):
     autoincrement: bool
     computed: bool
     foreign_keys: ForeignKeyRef
-    length: Optional[int]
+    length: Optional[int] = None
+    precision: Optional[int] = None
+    scale: Optional[int] = None
 
 
 class TableMetadata(BaseModel):
     name: str
-    uniques: list[tuple[str, ...]]
+    s_uniques: list[str]
+    m_uniques: list[tuple[str, ...]]
     parents: list[str]
     columns: list[ColumnMetadata]
 
@@ -43,6 +46,7 @@ class ErrorPacket(BaseModel):
     generic: Optional[str] = None
     specific: Optional[str] = None
     column: Optional[str] = None
+    type: Literal["warning", "error"] = "error"
 
 
 class TablePacket(BaseModel):

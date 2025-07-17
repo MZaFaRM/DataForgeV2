@@ -82,7 +82,6 @@ class Runner:
 
         self.db.create_url()
         self.db.create_engine()
-        self.db.create_inspector()
         self.db.test_connection()
 
         return self._ok(self.db.to_dict())
@@ -130,3 +129,26 @@ class Runner:
     def _handle_verify_spec(self, body: dict) -> dict:
         result = self.populator.verify_dataset(self.db, TableSpec(**body))
         return self._ok(result.model_dump())
+
+    def _handle_run_sql(self, body: dict) -> dict:
+        if body is None or "sql" not in body:
+            return self._err("SQL query is required.")
+        try:
+            self.db.run_sql(body["sql"])
+            return self._ok("Query executed successfully.")
+        except Exception as e:
+            return self._err(f"SQL execution failed: {str(e)}")
+
+    def _handle_get_logs(self, body: dict) -> dict:
+        try:
+            logs = self.db.read_logs(lines=(body.get("lines", 200) if body else 200))
+            return self._ok(logs)
+        except Exception as e:
+            return self._err(f"Failed to retrieve logs: {str(e)}")
+        
+    def _handle_clear_logs(self, body: dict) -> dict:
+        try:
+            self.db.clear_logs()
+            return self._ok("Logs cleared successfully.")
+        except Exception as e:
+            return self._err(f"Failed to clear logs: {str(e)}")

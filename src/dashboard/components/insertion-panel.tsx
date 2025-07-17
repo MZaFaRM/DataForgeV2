@@ -1,15 +1,22 @@
 import { log } from "console"
 import { Dispatch, SetStateAction, useEffect, useRef, useState } from "react"
-import { invokeTableData } from "@/api/db"
+import {
+  invokeClearLogs,
+  invokeGetLogs,
+  invokeRunSql,
+  invokeTableData,
+} from "@/api/db"
 import { invokeGetFakerMethods, invokeVerifySpec } from "@/api/fill"
 import { python } from "@codemirror/lang-python"
 import { sql } from "@codemirror/lang-sql"
 import { Icon } from "@iconify/react"
 import { CaretSortIcon, CheckIcon } from "@radix-ui/react-icons"
+import { invoke } from "@tauri-apps/api/core"
 import { githubDark, githubLight } from "@uiw/codemirror-theme-github"
 import CodeMirror, { EditorView } from "@uiw/react-codemirror"
 import { set } from "date-fns"
 import { useTheme } from "next-themes"
+import { FixedSizeList as List } from "react-window"
 
 import { cn } from "@/lib/utils"
 import { Badge } from "@/components/ui/badge"
@@ -47,6 +54,14 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table"
+import { Toaster } from "@/components/ui/toaster"
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip"
+import { toast } from "@/components/ui/use-toast"
 import {
   BaseSelectType,
   ColumnData,
@@ -54,7 +69,8 @@ import {
   ColumnSpecMap,
   DataPackage,
   DbData,
-  TableData,
+  ErrorPacketMap,
+  TableMetadata,
   TablePacket,
   TableSpec,
   TableSpecMap,
@@ -71,6 +87,8 @@ export default function InsertionPanel({
   activeTable,
   setActiveTable,
 }: ListTablesProps) {
+  const { theme } = useTheme()
+
   const ref = useRef<HTMLDivElement>(null)
   const insertTabRef = useRef<HTMLDivElement>(null)
   const previewTabRef = useRef<HTMLDivElement>(null)
@@ -81,56 +99,17 @@ export default function InsertionPanel({
   const [timeOfDay, setTimeOfDay] = useState<
     "sunrise" | "sunset" | "moonrise" | "moonset"
   >("sunrise")
-  const [tableData, setTableData] = useState<TableData | null>(null)
+  const [tableData, setTableData] = useState<TableMetadata | null>(null)
   const [fakerMethods, setFakerMethods] = useState<string[]>([])
   const [hoveredGroup, setHoveredGroup] = useState<string[] | null>(null)
   const [activeTab, setActiveTab] = useState<string>("insert")
   const [globalSpecs, setGlobalSpecs] = useState<TableSpecMap>({})
   const [tablePackets, setTablePackets] = useState<TablePacket | null>(null)
   const [pendingRefresh, setPendingRefresh] = useState(false)
-  const [logs, setLogs] = useState<string[]>([
-    "[INFO  sqlalchemy.engine.Engine] SHOW VARIABLES LIKE 'sql_mode'",
-    "[INFO  sqlalchemy.engine.Engine] {'param_1': 'sql_mode'}",
-    "[INFO  sqlalchemy.engine.Engine] Collected server setting: STRICT_TRANS_TABLES,NO_ENGINE_SUBSTITUTION",
-    "[INFO  sqlalchemy.engine.Engine] SELECT TABLE_NAME FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_SCHEMA=%s",
-    "[INFO  sqlalchemy.engine.Engine] {'TABLE_SCHEMA': 'test_db'}",
-    "[INFO  sqlalchemy.engine.Engine] Retrieved 42 table(s) from schema `test_db`",
-    "[INFO  sqlalchemy.engine.Engine] DESCRIBE `user_activity`",
-    "[INFO  sqlalchemy.engine.Engine] {}",
-    "[INFO  sqlalchemy.engine.Engine] Columns: [id, user_id, activity_type, metadata, created_at, updated_at]",
-    "[DEBUG sqlalchemy.pool.impl.QueuePool] Connection <mysql.connector.connection.MySQLConnection object at 0x102fe8120> checked out from pool",
-    "[INFO  sqlalchemy.engine.Engine] INSERT INTO `order_logs` (`order_id`, `status`, `payload`, `created_at`) VALUES (%s, %s, %s, %s)",
-    "[INFO  sqlalchemy.engine.Engine] (88273, 'FAILED', '{'error':'timeout','retry':false}', '2025-07-11 13:28:45')",
-    "[INFO  sqlalchemy.engine.Engine] SELECT `user_id`, COUNT(*) AS `login_count` FROM `logins` WHERE `created_at` >= %s GROUP BY `user_id` HAVING `login_count` > %s ORDER BY `login_count` DESC",
-    "[INFO  sqlalchemy.engine.Engine] ('2025-01-01 00:00:00', 100)",
-    "[WARNING sqlalchemy.dialects.mysql.base] Column 'session_data' has a JSON type but is mapped as a TEXT. Consider using the JSON type for better integration.",
-    "[INFO  sqlalchemy.engine.Engine] SHOW CREATE TABLE `audit_events`",
-    "[INFO  sqlalchemy.engine.Engine] {}",
-    "[INFO  sqlalchemy.engine.Engine] ",
-    "CREATE TABLE `audit_events` (",
-    "  `id` int NOT NULL AUTO_INCREMENT,",
-    "  `event_type` varchar(50) DEFAULT NULL,",
-    "  `data` json DEFAULT NULL,",
-    "  `created_at` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,",
-    "  PRIMARY KEY (`id`)",
-    ") ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci",
-    "[INFO  sqlalchemy.engine.Engine] COMMIT",
-    "[DEBUG sqlalchemy.pool.impl.QueuePool] Connection <mysql.connector.connection.MySQLConnection object at 0x103d9a2b0> returned to pool",
-  ])
+  const [sqlScript, setSqlScript] = useState<string>("")
 
   useEffect(() => {
     getTimeOfDay()
-    function updateSize() {
-      if (ref.current) {
-        const rect = ref.current.getBoundingClientRect()
-
-        const spaceBelow = window.innerHeight - rect.top
-        setAvailableHeight(spaceBelow - 40 + "px")
-
-        const spaceRight = window.innerWidth - rect.left
-        setAvailableWidth(spaceRight - 40 + "px")
-      }
-    }
 
     invokeGetFakerMethods()
       .then((methods) => {
@@ -147,13 +126,46 @@ export default function InsertionPanel({
 
   useEffect(() => {
     setActiveTab("insert")
+    fetchActiveTableData()
 
-    async function fetchAndInit() {
-      const table = await getTableData()
-      if (!table) return
+    insertTabRef.current?.scrollTo({
+      top: 0,
+      left: 0,
+      behavior: "smooth",
+    })
+    previewTabRef.current?.scrollTo({
+      top: 0,
+      left: 0,
+      behavior: "smooth",
+    })
+    logTabRef.current?.scrollTo({
+      top: logTabRef.current.scrollHeight,
+      left: 0,
+      behavior: "smooth",
+    })
+  }, [activeTable, dbData])
+
+  useEffect(() => {
+    if (activeTab === "preview" && (!tablePackets || pendingRefresh)) {
+      verifyTableSpec()
+      return
+    }
+  }, [activeTab])
+
+  async function fetchActiveTableData() {
+    if (!dbData || !dbData.connected || !activeTable) {
+      setTableData(null)
+      return
+    }
+
+    try {
+      const table = await invokeTableData(activeTable)
+      if (!table) {
+        setTableData(null)
+        return
+      }
 
       setTableData(table)
-
       setGlobalSpecs((prev) => {
         if (prev[table.name]) return prev
 
@@ -176,34 +188,62 @@ export default function InsertionPanel({
           },
         }
       })
+      return table
+    } catch (err) {
+      console.error("Error fetching table data:", err)
+      setTableData(null)
+      return null
+    }
+  }
+
+  function runSql() {
+    if (!sqlScript || sqlScript.trim() === "") {
+      toast({
+        variant: "destructive",
+        title: "Empty SQL script",
+        description: "Please enter a valid SQL script to execute.",
+      })
+      return
     }
 
-    fetchAndInit()
-  }, [activeTable])
+    invokeRunSql(sqlScript)
+      .then((success) => {
+        if (success) {
+          toast({
+            variant: "default",
+            title: "SQL executed successfully",
+          })
+          setPendingRefresh(true)
+          fetchActiveTableData()
+        } else {
+          toast({
+            variant: "destructive",
+            title: "SQL execution failed",
+            description: "Please check your SQL script for errors.",
+          })
+        }
+      })
+      .catch((error) => {
+        console.error("Error executing SQL:", error)
+        toast({
+          variant: "destructive",
+          title: "SQL execution error",
+          description: error.message,
+        })
+      })
+  }
 
-  useEffect(() => {
-    insertTabRef.current?.scrollTo({
-      top: 0,
-      left: 0,
-      behavior: "smooth",
-    })
-    previewTabRef.current?.scrollTo({
-      top: 0,
-      left: 0,
-      behavior: "smooth",
-    })
-    logTabRef.current?.scrollTo({
-      top: logTabRef.current.scrollHeight,
-      left: 0,
-      behavior: "smooth",
-    })
-  }, [activeTable])
+  function updateSize() {
+    if (ref.current) {
+      const rect = ref.current.getBoundingClientRect()
 
-  useEffect(() => {
-    if (activeTab === "preview" && (!tablePackets || pendingRefresh)) {
-      verifyTableSpec()
+      const spaceBelow = window.innerHeight - rect.top
+      setAvailableHeight(spaceBelow - 40 + "px")
+
+      const spaceRight = window.innerWidth - rect.left
+      setAvailableWidth(spaceRight - 40 + "px")
     }
-  }, [activeTab])
+  }
 
   function verifyTableSpec() {
     if (!activeTable) return
@@ -213,6 +253,7 @@ export default function InsertionPanel({
       noOfEntries: globalSpecs[activeTable]?.noOfEntries,
       columns: Object.values(globalSpecs[activeTable]?.columns) as ColumnSpec[],
     }
+    console.log("Verifying spec for table:", tableSpec)
     invokeVerifySpec(tableSpec)
       .then((res) => {
         setTablePackets(res)
@@ -240,237 +281,337 @@ export default function InsertionPanel({
     })
   }
 
-  async function getTableData(): Promise<TableData | null> {
-    if (!dbData || !dbData.connected || !activeTable) return null
-    try {
-      const res = await invokeTableData(activeTable)
-      setTableData(res)
-      return res
-    } catch (err) {
-      console.error("Error fetching table data:", err)
-      setTableData(null)
-      return null
-    }
-  }
-
   return (
-    <div
-      ref={ref}
-      className="flex flex-col"
-      style={{
-        height: availableHeight,
-        width: availableWidth,
-      }}
-    >
-      <div>
-        {!activeTable ? (
-          <>
-            <div className="mb-4 flex items-center space-x-2">
-              {Array.from({ length: 4 }).map((_, i) => (
-                <Icon
-                  key={i}
-                  icon="meteocons:dust-wind"
-                  className="h-8 w-8 text-muted-foreground"
-                />
-              ))}
-            </div>
-            <p className="mb-4 text-sm font-medium text-muted-foreground">
-              Select a table to continue.
-            </p>
-          </>
-        ) : (
-          <div className="flex items-start justify-between">
-            <div>
-              <div className="mb-2 flex items-center space-x-2">
-                <h2 className="text-2xl font-semibold tracking-wide">
-                  {tableData?.name || "Loading..."}
-                </h2>
-                <Icon
-                  key={activeTable}
-                  icon="meteocons:smoke-particles"
-                  className="h-8 w-8 text-muted-foreground"
-                />
+    <TooltipProvider>
+      <Toaster />
+      <div
+        ref={ref}
+        className="flex flex-col"
+        style={{
+          height: availableHeight,
+          width: availableWidth,
+        }}
+      >
+        <div>
+          {!activeTable ? (
+            <>
+              <div className="mb-4 flex items-center space-x-2">
+                {Array.from({ length: 4 }).map((_, i) => (
+                  <Icon
+                    key={i}
+                    icon="meteocons:dust-wind"
+                    className="h-8 w-8 text-muted-foreground"
+                  />
+                ))}
+              </div>
+              <p className="mb-4 text-sm font-medium text-muted-foreground">
+                Select a table to continue.
+              </p>
+            </>
+          ) : (
+            <div className="flex items-start justify-between">
+              <div>
+                <div className="mb-2 flex items-center space-x-2">
+                  <h2 className="text-2xl font-semibold tracking-wide">
+                    {tableData?.name || "Loading..."}
+                  </h2>
+                  <Icon
+                    key={activeTable}
+                    icon="meteocons:smoke-particles"
+                    className="h-8 w-8 text-muted-foreground"
+                  />
+                </div>
+                <div>
+                  <div className="mb-2 flex gap-2">
+                    <Icon
+                      icon="carbon:parent-node"
+                      className="h-4 w-4 text-muted-foreground"
+                    />
+                    {tableData?.parents && tableData.parents.length > 0 ? (
+                      tableData.parents.map((parent) => (
+                        <Badge
+                          key={parent}
+                          variant="outline"
+                          className="cursor-pointer font-medium hover:bg-muted-foreground hover:text-slate-300"
+                          onClick={() => setActiveTable(parent)}
+                          title="Parent Table"
+                        >
+                          {parent}
+                        </Badge>
+                      ))
+                    ) : (
+                      <Badge
+                        variant="outline"
+                        className="cursor-not-allowed bg-muted font-medium"
+                      >
+                        Orphan
+                      </Badge>
+                    )}
+                  </div>
+                </div>
               </div>
               <div>
-                <div className="mb-2 flex gap-2">
-                  <Icon
-                    icon="carbon:parent-node"
-                    className="h-4 w-4 text-muted-foreground"
+                <HandleTransaction />
+              </div>
+            </div>
+          )}
+        </div>
+        <div className="flex items-end">
+          <div className="ml-auto flex items-center rounded text-sm font-medium">
+            <TabButton
+              label="Script"
+              icon="gravity-ui:abbr-sql"
+              isActive={activeTab === "sql"}
+              onClick={() => setActiveTab("sql")}
+            />
+            <TabButton
+              label="Log"
+              icon="octicon:log-16"
+              isActive={activeTab === "log"}
+              onClick={() => setActiveTab("log")}
+            />
+            <TabButton
+              label="Preview"
+              icon="lucide:view"
+              isActive={activeTab === "preview"}
+              onClick={() => setActiveTab("preview")}
+            />
+            <TabButton
+              label="Insert"
+              icon="dashicons:insert"
+              isActive={activeTab === "insert"}
+              onClick={() => setActiveTab("insert")}
+            />
+          </div>
+        </div>
+        <div className="flex h-full w-full flex-col overflow-hidden rounded rounded-tr-none border">
+          {tableData && tableData.columns && globalSpecs[tableData.name] ? (
+            <div className="h-full w-full">
+              <div
+                ref={insertTabRef}
+                className={cn(
+                  "h-full w-full overflow-auto",
+                  activeTab !== "insert" && "hidden"
+                )}
+              >
+                <Table>
+                  <TableBody>
+                    {tableData.columns.map((column) => (
+                      <DBColumn
+                        key={`${tableData.name}-${column.name}`}
+                        column={column}
+                        columnSpec={
+                          (globalSpecs[tableData.name]?.columns[
+                            column.name
+                          ] as ColumnSpec) ?? {}
+                        }
+                        setColumnSpec={(newSpec) =>
+                          setGlobalSpecs((prev) => {
+                            const table = tableData.name
+                            return {
+                              ...prev,
+                              [table]: {
+                                ...prev?.[table],
+                                columns: {
+                                  ...prev?.[table]?.columns,
+                                  [column.name]: newSpec,
+                                },
+                              },
+                            }
+                          })
+                        }
+                        fakerMethods={fakerMethods}
+                        uniqueGroups={[
+                          ...(tableData.sUniques?.map((g) => [g]) || []),
+                          ...(tableData.mUniques || []),
+                        ]}
+                        hoveredGroup={hoveredGroup}
+                        setHoveredGroup={setHoveredGroup}
+                      />
+                    ))}
+                  </TableBody>
+                </Table>
+              </div>
+              <div
+                ref={previewTabRef}
+                className={cn(
+                  activeTab !== "preview" && "hidden",
+                  "h-full w-full overflow-auto"
+                )}
+              >
+                <RenderPreview
+                  tableMetadata={tableData}
+                  tablePackets={tablePackets}
+                  doRefresh={verifyTableSpec}
+                  noOfRows={globalSpecs[tableData.name]?.noOfEntries}
+                  setNoOfRows={(rows) =>
+                    setGlobalSpecs((prev) => {
+                      return {
+                        ...prev,
+                        [tableData.name]: {
+                          ...prev?.[tableData.name],
+                          noOfEntries: rows,
+                        },
+                      }
+                    })
+                  }
+                />
+              </div>
+              <div
+                ref={logTabRef}
+                className={cn(
+                  "relative flex h-full w-full flex-col",
+                  activeTab !== "log" && "hidden"
+                )}
+              >
+                <RenderLogs activeTab={activeTab} />
+              </div>
+              <div
+                className={cn(
+                  "relative flex h-full w-full flex-col",
+                  activeTab !== "sql" && "hidden"
+                )}
+              >
+                <div className="flex-1 overflow-auto">
+                  <CodeMirror
+                    value={sqlScript || "\n".repeat(100)}
+                    onChange={(value) => setSqlScript(value)}
+                    placeholder={"-- SQL expression"}
+                    extensions={[sql(), EditorView.lineWrapping]}
+                    theme={theme === "light" ? githubLight : githubDark}
+                    className="h-full w-full"
+                    style={{ border: "none" }}
+                    basicSetup={{
+                      lineNumbers: false,
+                      foldGutter: false,
+                    }}
                   />
-                  {tableData?.parents && tableData.parents.length > 0 ? (
-                    tableData.parents.map((parent) => (
-                      <Badge
-                        key={parent}
-                        variant="outline"
-                        className="cursor-pointer font-medium hover:bg-muted-foreground hover:text-slate-300"
-                        onClick={() => setActiveTable(parent)}
-                        title="Parent Table"
-                      >
-                        {parent}
-                      </Badge>
-                    ))
-                  ) : (
-                    <Badge
-                      variant="outline"
-                      className="cursor-not-allowed bg-muted font-medium"
-                    >
-                      Orphan
-                    </Badge>
-                  )}
+                </div>
+                <div className="absolute bottom-4 right-4 z-10 bg-inherit p-2 text-right">
+                  <button
+                    className={cn(
+                      "flex items-center rounded border px-4 py-2 text-sm font-medium",
+                      "text-green-500 hover:bg-green-600 hover:text-white"
+                    )}
+                    onClick={() => runSql()}
+                  >
+                    <Icon icon="lsicon:lightning-filled" className="mr-2" />
+                    Execute All
+                  </button>
                 </div>
               </div>
             </div>
-            <div>
-              <HandleTransaction />
-            </div>
-          </div>
-        )}
-      </div>
-      <div className="flex items-end">
-        <div className="ml-auto flex items-center rounded text-sm font-medium">
-          <TabButton
-            label="Log"
-            icon="octicon:log-16"
-            isActive={activeTab === "log"}
-            onClick={() => setActiveTab("log")}
-          />
-          <TabButton
-            label="Preview"
-            icon="lucide:view"
-            isActive={activeTab === "preview"}
-            onClick={() => setActiveTab("preview")}
-          />
-          <TabButton
-            label="Insert"
-            icon="dashicons:insert"
-            isActive={activeTab === "insert"}
-            onClick={() => setActiveTab("insert")}
-          />
-        </div>
-      </div>
-      <div className="flex h-full w-full flex-col overflow-hidden rounded rounded-tr-none border">
-        {tableData && tableData.columns && globalSpecs[tableData.name] ? (
-          <div className="h-full w-full">
-            <div
-              ref={insertTabRef}
-              className={cn(
-                "h-full w-full overflow-auto",
-                activeTab !== "insert" && "hidden"
-              )}
-            >
-              <Table>
-                <TableBody>
-                  {tableData.columns.map((column) => (
-                    <DBColumn
-                      key={`${tableData.name}-${column.name}`}
-                      column={column}
-                      columnSpec={
-                        (globalSpecs[tableData.name]?.columns[
-                          column.name
-                        ] as ColumnSpec) ?? {}
-                      }
-                      setColumnSpec={(newSpec) =>
-                        setGlobalSpecs((prev) => {
-                          const table = tableData.name
-                          return {
-                            ...prev,
-                            [table]: {
-                              ...prev?.[table],
-                              columns: {
-                                ...prev?.[table]?.columns,
-                                [column.name]: newSpec,
-                              },
-                            },
-                          }
-                        })
-                      }
-                      fakerMethods={fakerMethods}
-                      uniques={tableData.uniques}
-                      hoveredGroup={hoveredGroup}
-                      setHoveredGroup={setHoveredGroup}
-                    />
-                  ))}
-                </TableBody>
-              </Table>
-            </div>
-            <div
-              ref={previewTabRef}
-              className={cn(
-                activeTab !== "preview" && "hidden",
-                "h-full w-full overflow-auto"
-              )}
-            >
-              <RenderPreview
-                tableData={tableData}
-                tablePackets={tablePackets}
-                doRefresh={verifyTableSpec}
-                noOfRows={globalSpecs[tableData.name]?.noOfEntries}
-                setNoOfRows={(rows) =>
-                  setGlobalSpecs((prev) => {
-                    return {
-                      ...prev,
-                      [tableData.name]: {
-                        ...prev?.[tableData.name],
-                        noOfEntries: rows,
-                      },
-                    }
-                  })
-                }
+          ) : (
+            <div className="flex h-full w-full items-center justify-center">
+              <Icon
+                icon={`meteocons:${timeOfDay}-fill`}
+                className="margin-auto h-16 w-16"
               />
             </div>
-            <div
-              ref={logTabRef}
-              className={cn(
-                "h-full w-full overflow-auto",
-                activeTab !== "log" && "hidden"
-              )}
-            >
-              <RenderLogs logs={logs} />
-            </div>
-          </div>
-        ) : (
-          <div className="flex h-full w-full items-center justify-center">
-            <Icon
-              icon={`meteocons:${timeOfDay}`}
-              className="margin-auto h-16 w-16"
-            />
-          </div>
-        )}
+          )}
+        </div>
       </div>
-    </div>
+    </TooltipProvider>
   )
 }
 
-interface RenderLogsProps {
-  logs: string[]
-}
+function RenderLogs({ activeTab }: { activeTab?: string }) {
+  const [logs, setLogs] = useState<string[]>([])
 
-function RenderLogs({ logs }: RenderLogsProps) {
+  useEffect(() => {
+    if (activeTab === "log") {
+      retrieveLogs()
+      const intervalID = setInterval(() => {
+        retrieveLogs()
+      }, 1000)
+
+      return () => clearInterval(intervalID)
+    }
+  }, [activeTab])
+
+  function retrieveLogs() {
+    invokeGetLogs()
+      .then((logs) => {
+        setLogs(logs.reverse())
+        console.log("Fetched logs:", logs)
+      })
+      .catch((error) => {
+        console.error("Error fetching logs:", error)
+        setLogs([])
+      })
+  }
+
+  function clearLogs() {
+    invokeClearLogs()
+      .then((success) => {
+        if (success) {
+          setLogs([])
+          toast({
+            variant: "default",
+            title: "Logs cleared successfully",
+          })
+        } else {
+          toast({
+            variant: "destructive",
+            title: "Failed to clear logs",
+            description: "Please try again later.",
+          })
+        }
+      })
+      .catch((error) => {
+        console.error("Error clearing logs:", error)
+        toast({
+          variant: "destructive",
+          title: "Error clearing logs",
+          description: error.message,
+        })
+      })
+  }
+
   return (
-    <div className="m-4 mt-auto">
-      {logs
-        .slice()
-        .reverse()
-        .map((log, index) => (
-          <p
-            key={index}
-            className={cn(
-              "text-sm text-muted-foreground",
-              index === logs.length - 1 && "font-medium text-slate-400"
-            )}
-          >
-            {log}
-          </p>
+    <div className="flex-1 overflow-auto">
+      <div className="m-4 mt-auto">
+        {logs
+          .slice()
+          .reverse()
+          .map((log, index) => (
+            <p
+              key={index}
+              className={cn(
+                "text-sm text-muted-foreground",
+                index === logs.length - 1 && "font-medium text-slate-400"
+              )}
+            >
+              {log}
+            </p>
+          ))}
+        {Array.from({ length: 4 }).map((_, index) => (
+          <br key={index} />
         ))}
-      {Array.from({ length: 4 }).map((_, index) => (
-        <br key={index} />
-      ))}
+      </div>
+
+      <div
+        className={cn(
+          "absolute bottom-4 right-4 z-10 bg-inherit p-2 text-right"
+        )}
+      >
+        <button
+          className={cn(
+            "flex items-center rounded border px-4 py-2 text-sm font-medium",
+            "hover:bg-muted"
+          )}
+          onClick={() => clearLogs()}
+        >
+          <Icon icon="entypo:trash" className="mr-2" />
+          Clear Logs
+        </button>
+      </div>
     </div>
   )
 }
 
 interface RenderPreviewProps {
-  tableData: TableData
+  tableMetadata: TableMetadata
   tablePackets: TablePacket | null
   doRefresh: () => void
   noOfRows: number
@@ -478,13 +619,49 @@ interface RenderPreviewProps {
 }
 
 function RenderPreview({
-  tableData,
+  tableMetadata,
   tablePackets,
   doRefresh,
   noOfRows,
   setNoOfRows,
 }: RenderPreviewProps) {
   const [dice, setDice] = useState<number>(1)
+  const [errorMaps, setErrorMaps] = useState<ErrorPacketMap | null>(null)
+
+  useEffect(() => {
+    if (!errorMaps || Object.keys(errorMaps).length === 0) return
+
+    const messages = Object.entries(errorMaps)
+      .map(([col, errs]) =>
+        errs
+          .map((e) => `• ${col}: ${e.specific ?? e.generic ?? "Unknown"}`)
+          .join("\n")
+      )
+      .join("\n")
+
+    toast({
+      variant: "destructive",
+      title: "Errors found",
+      description: <pre className="whitespace-pre-wrap">{messages}</pre>,
+      duration: 4000,
+    })
+  }, [errorMaps])
+
+  useEffect(() => {
+    if (tablePackets) {
+      const newErrorMaps: ErrorPacketMap = {}
+      tablePackets.errors.forEach((error) => {
+        if (error.column) {
+          if (!newErrorMaps[error.column]) {
+            newErrorMaps[error.column] = []
+          }
+          newErrorMaps[error.column].push(error)
+        }
+      })
+      console.log("error map", newErrorMaps)
+      setErrorMaps(newErrorMaps)
+    }
+  }, [tablePackets])
 
   function shuffleDice() {
     const MaxRolls = 5
@@ -506,30 +683,58 @@ function RenderPreview({
           <TableRow>
             {tablePackets &&
               tablePackets.columns.map((column) => (
-                <TableHead key={column}>{column}</TableHead>
+                <TableHead
+                  title={
+                    errorMaps && Object.hasOwn(errorMaps, column)
+                      ? errorMaps[column].map((e) => e.specific).join(", ")
+                      : ""
+                  }
+                  key={column}
+                  className={cn(
+                    "bg-purple-400 text-center text-black",
+                    errorMaps &&
+                      Object.hasOwn(errorMaps, column) &&
+                      "bg-red-400"
+                  )}
+                >
+                  {column}
+                </TableHead>
               ))}
           </TableRow>
         </TableHeader>
         <TableBody>
           {tablePackets &&
-            Array.from({ length: tablePackets.entries?.[0].length }).map(
-              (_, colIndex) => (
-                <TableRow key={`${tablePackets.name}.${colIndex}`}>
-                  {Array.from({ length: tablePackets.entries.length }).map(
-                    (_, rowIndex) => (
+            (() => {
+              const columns = tablePackets.columns ?? []
+              const entries = tablePackets.entries ?? []
+              const rowCount = entries.length ?? 0
+              const colCount = entries[0]?.length || 0
+              const name = tablePackets.name
+
+              return Array.from({ length: rowCount }).map((_, rowIndex) => (
+                <TableRow key={`${name}.${rowIndex}`}>
+                  {Array.from({ length: colCount }).map((_, colIndex) => {
+                    const columnName = columns[colIndex]
+                    const hasError =
+                      errorMaps && Object.hasOwn(errorMaps, columnName)
+
+                    return (
                       <TableCell
-                        key={`${tablePackets.name}.${colIndex}.${rowIndex}`}
-                        className="w-[50px] overflow-x-auto whitespace-nowrap"
+                        key={`${name}.${colIndex}.${rowIndex}`}
+                        className={cn(
+                          "w-[50px] overflow-x-auto whitespace-nowrap",
+                          hasError && "border-x border-red-400"
+                        )}
                       >
                         <div className="max-w-full overflow-x-auto">
-                          {tablePackets.entries[rowIndex][colIndex]}
+                          {entries[rowIndex][colIndex]}
                         </div>
                       </TableCell>
                     )
-                  )}
+                  })}
                 </TableRow>
-              )
-            )}
+              ))
+            })()}
         </TableBody>
       </Table>
 
@@ -592,17 +797,17 @@ interface DBColumnProps {
   column: ColumnData
   columnSpec: ColumnSpec
   setColumnSpec: (newSpec: ColumnSpec) => void
+  uniqueGroups: string[][]
+  fakerMethods: string[]
   hoveredGroup: string[] | null
   setHoveredGroup: (group: string[] | null) => void
-  uniques: string[][]
-  fakerMethods: string[]
 }
 
 function DBColumn({
   column,
   columnSpec,
   setColumnSpec,
-  uniques,
+  uniqueGroups,
   fakerMethods,
   hoveredGroup,
   setHoveredGroup,
@@ -611,7 +816,7 @@ function DBColumn({
   const [advancedSelect, setAdvanceSelect] = useState<string | null>(null)
   const [nullProbability, setNullProbability] = useState(0)
 
-  const thisGroups = uniques.filter((g) => g.includes(column.name))
+  const thisGroups = uniqueGroups.filter((g) => g.includes(column.name))
   const inHovered = hoveredGroup?.includes(column.name)
 
   const nullReason = column.primaryKey
@@ -652,30 +857,46 @@ function DBColumn({
       onMouseLeave={() => setHoveredGroup(null)}
     >
       <TableCell
-        title={
-          column.primaryKey
-            ? "Primary Key"
-            : thisGroups.length > 0
-              ? `UNIQUE(${thisGroups})`
-              : "Not Unique"
-        }
         className={cn(
-          inHovered && "font-medium text-blue-400",
+          "flex items-center",
+          inHovered && "font-medium text-lime-500",
           column.primaryKey && "text-purple-500"
         )}
       >
         {column.name}
+        <div className="ml-2 flex items-center space-x-1">
+          {column.primaryKey ? (
+            <div className="rounded border p-1 text-xs font-medium text-current">
+              PK
+            </div>
+          ) : thisGroups.length == 1 ? (
+            <div className="rounded border p-1 text-xs font-medium text-current">
+              UQ
+            </div>
+          ) : (
+            thisGroups.length > 1 && (
+              <div className="rounded border p-1 text-xs font-medium text-current">
+                UQG
+              </div>
+            )
+          )}
+          {!column.nullable && (
+            <div className="rounded border p-1 text-xs font-medium text-current">
+              NN
+            </div>
+          )}
+        </div>
       </TableCell>
 
       <TableCell>{column.type}</TableCell>
 
-      <TableCell>
+      {/* <TableCell>
         <RenderNullChanceControl
           nullReason={nullReason}
           nullProbability={nullProbability}
           setNullProbability={setNullProbability}
         />
-      </TableCell>
+      </TableCell> */}
 
       <TableCell>
         <BaseFillSelect
@@ -899,16 +1120,6 @@ function AdvancedFillSelect({
 }: AdvancedFillSelectProps) {
   const [open, setOpen] = useState(false)
   const { theme } = useTheme()
-
-  useEffect(() => {
-    if (!selected) {
-      if (baseSelect === "faker") {
-        setSelected(fakerMethods?.[0] || null)
-      } else {
-        setSelected(null)
-      }
-    }
-  }, [baseSelect])
 
   return baseSelect === "faker" ? (
     <Popover open={open} onOpenChange={setOpen}>

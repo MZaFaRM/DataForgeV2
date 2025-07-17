@@ -31,9 +31,10 @@ export interface ColumnData {
   length: number | null
 }
 
-export interface TableData {
+export interface TableMetadata {
   name: string
-  uniques: string[][]
+  sUniques: string[]
+  mUniques: string[][]
   parents: string[]
   columns: ColumnData[]
 }
@@ -76,8 +77,18 @@ export interface TableSpecEntry {
 
 export type TableSpecMap = Record<string, TableSpecEntry>
 
+export interface ErrorPacket {
+  generic: string | null
+  specific: string | null
+  column: string | null
+  type: "warning" | "error"
+}
+
+export type ErrorPacketMap = Record<string, ErrorPacket[]>
+
 export interface TablePacket {
   name: string
   columns: string[]
   entries: string[][]
+  errors: ErrorPacket[]
 }

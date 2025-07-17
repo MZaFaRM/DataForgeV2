@@ -18,14 +18,15 @@ import {
   CardTitle,
 } from "@/components/ui/card"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
+import { TooltipProvider } from "@/components/ui/tooltip"
 import { DbData } from "@/components/types"
 
 export default function DashboardPage() {
-  const [dbData, setDbInfo] = useState<DbData | null>(null)
+  const [dbData, setDbData] = useState<DbData | null>(null)
   const [activeTable, setActiveTable] = useState<string | null>(null)
 
   return (
-    <>
+    <TooltipProvider>
       <div className="flex-col md:flex">
         <div className="border-b">
           <div className="flex h-16 items-center px-4">
@@ -57,7 +58,7 @@ export default function DashboardPage() {
                 would mean a lot.
               </p>
             </div>
-            <ConnectionStatus dbData={dbData} setDbInfo={setDbInfo} />
+            <ConnectionStatus dbData={dbData} setDbData={setDbData} />
           </div>
           <div className="flex flex-row space-y-4">
             <ListTables
@@ -73,6 +74,6 @@ export default function DashboardPage() {
           </div>
         </div>
       </div>
-    </>
+    </TooltipProvider>
   )
 }

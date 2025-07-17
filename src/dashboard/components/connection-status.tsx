@@ -27,12 +27,12 @@ import { DbData } from "@/components/types"
 
 interface ConnectionStatusProps {
   dbData: DbData | null
-  setDbInfo: (info: DbData | null) => void
+  setDbData: (info: DbData | null) => void
 }
 
 export default function ConnectionStatus({
   dbData,
-  setDbInfo,
+  setDbData,
 }: ConnectionStatusProps) {
   const [showConnectDBDialog, setShowConnectDBDialog] = useState<boolean>(false)
   const [newDbInfo, setNewDbInfo] = useState<DbData | null>(null)
@@ -50,7 +50,7 @@ export default function ConnectionStatus({
     setDbConnecting(true)
 
     invokeDbInfo().then((payload) => {
-      setDbInfo(payload)
+      setDbData({ ...payload })
       setRefreshIcon("line-md:check-all")
       setDbConnecting(false)
 
@@ -110,7 +110,7 @@ export default function ConnectionStatus({
   function handleDisconnect() {
     invokeDbDisconnect()
       .then(() => {
-        setDbInfo(null)
+        setDbData(null)
         setShowConnectDBDialog(false)
       })
       .catch((error) => {

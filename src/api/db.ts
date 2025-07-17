@@ -1,4 +1,4 @@
-import { DbData, TableData, TableEntry } from "@/components/types"
+import { DbData, TableEntry, TableMetadata } from "@/components/types"
 
 import { invokeAndExtract } from "./cli"
 
@@ -19,8 +19,26 @@ export function invokeGetTables() {
 }
 
 export function invokeTableData(table: string) {
-  return invokeAndExtract<{ name: string }, TableData>({
+  return invokeAndExtract<{ name: string }, TableMetadata>({
     kind: "table_metadata",
     body: { name: table },
+  })
+}
+
+export function invokeGetLogs(lines: number = 200) {
+  return invokeAndExtract<{ lines: number }, string[]>({
+    kind: "get_logs",
+    body: { lines },
+  })
+}
+
+export function invokeClearLogs() {
+  return invokeAndExtract<void, boolean>({ kind: "clear_logs" })
+}
+
+export function invokeRunSql(sql: string) {
+  return invokeAndExtract<{ sql: string }, boolean>({
+    kind: "run_sql",
+    body: { sql },
   })
 }

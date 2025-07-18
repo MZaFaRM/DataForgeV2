@@ -4,14 +4,16 @@ import threading
 import traceback
 from typing import Any
 
-from core.types import TableSpec
+from core.utils.types import TableSpec
 
-from .toolkit import DatabaseManager, Populator, Request, Response
+from core.populate.populator import Populator
+from core.populate.database import DatabaseManager
+from core.utils.response import Request, Response
 
 
 class Runner:
     def __init__(self):
-        self.db = DatabaseManager()
+        self.dbm = DatabaseManager()
         self.populator = Populator()
 
     def listen(self):
@@ -60,7 +62,7 @@ class Runner:
         return self._ok("pong")
 
     def _handle_info(self, _=None) -> dict:
-        return self._ok(self.db.to_dict())
+        return self._ok(self.dbm.to_dict())
 
     def _handle_faker_methods(self, _=None) -> dict:
         return self._ok(self.populator.methods)
@@ -70,7 +72,7 @@ class Runner:
         missing = [k for k in required if not creds.get(k)]
 
         for k in required:
-            setattr(self.db, k, creds.get(k, ""))
+            setattr(self.dbm, k, creds.get(k, ""))
 
         if missing:
             msg = (
@@ -80,24 +82,24 @@ class Runner:
             )
             return self._err(msg)
 
-        self.db.create_url()
-        self.db.create_engine()
-        self.db.test_connection()
+        self.dbm.create_url()
+        self.dbm.create_engine()
+        self.dbm.test_connection()
 
-        return self._ok(self.db.to_dict())
+        return self._ok(self.dbm.to_dict())
 
     def _handle_disconnect(self, _=None) -> dict:
-        self.db = DatabaseManager()
+        self.dbm = DatabaseManager()
         return self._ok("Disconnected successfully.")
 
     def _handle_tables(self, _=None) -> dict:
         table_info = {"table_data": {}, "sorted_tables": []}
 
         t1 = threading.Thread(
-            target=lambda: table_info.update(table_data=self.db.get_tables())
+            target=lambda: table_info.update(table_data=self.dbm.get_tables())
         )
         t2 = threading.Thread(
-            target=lambda: table_info.update(sorted_tables=self.db.sort_tables())
+            target=lambda: table_info.update(sorted_tables=self.dbm.sort_tables())
         )
 
         t1.start()
@@ -120,35 +122,35 @@ class Runner:
         if "name" not in body:
             return self._err("Table name is required.")
 
-        metadata = self.db.get_table_metadata(body["name"])
+        metadata = self.dbm.get_table_metadata(body["name"])
         if not metadata:
             return self._err(f"No metadata found for table '{body['name']}'.")
 
         return self._ok(metadata.model_dump())
 
     def _handle_verify_spec(self, body: dict) -> dict:
-        result = self.populator.verify_dataset(self.db, TableSpec(**body))
+        result = self.populator.resolve_specifications(self.dbm, TableSpec(**body))
         return self._ok(result.model_dump())
 
     def _handle_run_sql(self, body: dict) -> dict:
         if body is None or "sql" not in body:
             return self._err("SQL query is required.")
         try:
-            self.db.run_sql(body["sql"])
+            self.dbm.run_sql(body["sql"])
             return self._ok("Query executed successfully.")
         except Exception as e:
             return self._err(f"SQL execution failed: {str(e)}")
 
     def _handle_get_logs(self, body: dict) -> dict:
         try:
-            logs = self.db.read_logs(lines=(body.get("lines", 200) if body else 200))
+            logs = self.dbm.read_logs(lines=(body.get("lines", 200) if body else 200))
             return self._ok(logs)
         except Exception as e:
             return self._err(f"Failed to retrieve logs: {str(e)}")
-        
+
     def _handle_clear_logs(self, body: dict) -> dict:
         try:
-            self.db.clear_logs()
+            self.dbm.clear_logs()
             return self._ok("Logs cleared successfully.")
         except Exception as e:
             return self._err(f"Failed to clear logs: {str(e)}")

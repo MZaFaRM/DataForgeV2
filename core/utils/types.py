@@ -28,11 +28,18 @@ class TableMetadata(BaseModel):
     parents: list[str]
     columns: list[ColumnMetadata]
 
+    @property
+    def column_map(self) -> dict[str, ColumnMetadata]:
+        return {col.name: col for col in self.columns}
+
+    def get_column(self, name: str) -> Optional[ColumnMetadata]:
+        return self.column_map.get(name)
+
 
 class ColumnSpec(BaseModel):
     name: str
     null_chance: float
-    method: Optional[str] = None
+    generator: Optional[str] = None
     type: Literal["faker", "regex", "foreign", "auto"]
 
 
@@ -43,10 +50,9 @@ class TableSpec(BaseModel):
 
 
 class ErrorPacket(BaseModel):
-    generic: Optional[str] = None
-    specific: Optional[str] = None
-    column: Optional[str] = None
     type: Literal["warning", "error"] = "error"
+    column: Optional[str] = None
+    msg: Optional[str] = None
 
 
 class TablePacket(BaseModel):

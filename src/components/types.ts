@@ -59,7 +59,7 @@ export type BaseSelectType = "faker" | "regex" | "foreign" | "auto" | "python"
 export interface ColumnSpec {
   name: string
   nullChance: number
-  method: string | null
+  generator: string | null
   type: BaseSelectType
 }
 export interface TableSpec {
@@ -78,8 +78,7 @@ export interface TableSpecEntry {
 export type TableSpecMap = Record<string, TableSpecEntry>
 
 export interface ErrorPacket {
-  generic: string | null
-  specific: string | null
+  msg: string | null
   column: string | null
   type: "warning" | "error"
 }

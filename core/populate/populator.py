@@ -3,9 +3,10 @@ import contextlib
 import math
 from dataclasses import dataclass
 from numbers import Number
-from typing import Any, Callable
+from typing import Any, Callable, cast
 
 from faker import Faker
+import faker
 
 from core.helpers import cap_numeric, cap_string
 from core.utils.decorators import with_cache
@@ -77,13 +78,12 @@ class Populator:
                     col_spec=col_spec,
                     make_func=make_func,
                     rows=table_spec.no_of_entries,
+                    entries=column_values,
                     cache=cache,
                 )
 
-                for row_index in range(
-                    min(len(generated_rows), table_spec.no_of_entries)
-                ):
-                    column_values[col_spec.name][row_index] = generated_rows[row_index]
+                limit = min(len(generated_rows), table_spec.no_of_entries)
+                column_values[col_spec.name][:limit] = generated_rows[:limit]
 
                 if len(generated_rows) < table_spec.no_of_entries:
                     error = (
@@ -107,6 +107,13 @@ class Populator:
         # make the entries row major
         return errors, list(map(list, zip(*column_values.values())))
 
+    @dataclass
+    class ColumnContext:
+        col_meta: ColumnMetadata
+        col_spec: ColumnSpec
+        n: int
+        entries: dict[str, list[str]] | None = None
+
     # region make functions
     def get_make_func(self, col_spec: ColumnSpec):
         fns = {
@@ -120,20 +127,18 @@ class Populator:
 
         raise ValueError(f"Unknown type `{col_spec.type}` for column `{col_spec.name}`")
 
-    def make_faker(
-        self, col_meta: ColumnMetadata, col_spec: ColumnSpec, n: int
-    ) -> list:
-        assert col_spec.generator
-        faker_fn = getattr(self.faker, col_spec.generator)
-        col = col_meta
-        return self._sample_values(n, faker_fn, col)
+    def make_faker(self, context: ColumnContext) -> list:
+        assert context.col_spec.generator, "Faker generator is not specified."
+        faker_fn = getattr(self.faker, context.col_spec.generator)
+        return self._sample_values(context.n, faker_fn, context.col_meta)
 
-    def make_python(self, col_meta: ColumnMetadata, c_spec: ColumnSpec, n: int) -> list:
-        if not c_spec.generator:
+    def make_python(self, context: ColumnContext) -> list:
+        if not context.col_spec.generator:
             return []
 
+        assert context.entries
         try:
-            tree = ast.parse(c_spec.generator)
+            tree = ast.parse(context.col_spec.generator)
             generator_func = next(
                 (
                     node
@@ -143,33 +148,39 @@ class Populator:
                 None,
             )
 
-            columns = c_spec.generator
-
             # Prepare the environment for execution
             env = {
-                "faker": self.faker,
-                "columns": columns,
+                "faker": faker,
+                "columns": {},
+                "order": lambda x: (lambda f: f),
                 "__builtins__": __builtins__,
             }
             exec(compile(tree, filename="<ast>", mode="exec"), env)
 
             # Call the generator function
             gen = env["generator"]
-            return self._sample_values(
-                n,
-                lambda: gen(columns, Faker()),
-                col_meta,
-            )
+            col = context.col_meta
+
+            rows = []
+            for idx in range(context.n):
+                columns = {key: context.entries[key][idx] for key in context.entries}
+                val = gen(columns=columns)
+
+                if isinstance(val, str):
+                    val = cap_string(val, col.length)
+                elif isinstance(val, Number):
+                    val = cap_numeric(val, col.precision, col.scale)  # type: ignore
+
+                rows.append(str(val))
+            return rows
 
         except SyntaxError as e:
             raise VerificationError(f"Syntax Error in Python script: {e}")
 
-    def make_regex(self, col_meta: ColumnMetadata, c_spec: ColumnSpec, n: int) -> list:
+    def make_regex(self, context: ColumnContext) -> list:
         raise NotImplementedError("Regex generation is not implemented yet.")
 
-    def make_foreign(
-        self, col_meta: ColumnMetadata, c_spec: ColumnSpec, n: int
-    ) -> list:
+    def make_foreign(self, context: ColumnContext) -> list:
         raise NotImplementedError("Foreign key generation is not implemented yet.")
 
     # endregion
@@ -183,9 +194,9 @@ class Populator:
             val = gen_fn()
 
             if isinstance(val, str):
-                val = cap_string(gen_fn(), col.length)
+                val = cap_string(val, col.length)
             elif isinstance(val, Number):
-                val = cap_numeric(gen_fn(), col.precision, col.scale)
+                val = cap_numeric(val, col.precision, col.scale)  # type: ignore
 
             rows.append(str(val))
 
@@ -198,18 +209,23 @@ class Populator:
         col_spec: ColumnSpec,
         make_func: Callable,
         rows: int,
+        entries: dict[str, list[str]],
         cache: dict[str, Any] | None = None,
     ) -> list:
         max_attempts = 10
         generated_rows = []
         col_meta = table_meta.get_column(col_spec.name)
         assert col_meta, f"Column {col_spec.name} not found in table {table_meta.name}"
+
+        context = self.ColumnContext(
+            col_meta=col_meta,
+            col_spec=col_spec,
+            n=rows,
+            entries=entries if entries else None,
+        )
+
         for _ in range(max_attempts):
-            generated_rows = make_func(
-                col_meta=col_meta,
-                col_spec=col_spec,
-                n=rows - len(generated_rows),
-            )
+            generated_rows = make_func(context=context)
 
             generated_rows = self._filter_rows(
                 dbm=dbm,
@@ -240,12 +256,11 @@ class Populator:
 
                 for node in tree.body:
                     if isinstance(node, ast.FunctionDef) and node.name == "generator":
-                        if len(node.args.args) != 2 or (
+                        if len(node.args.args) != 1 or (
                             node.args.args[0].arg != "columns"
-                            and node.args.args[1].arg != "faker"
                         ):
                             raise ValueError(
-                                "generator() must take exactly 2 args: 'columns', 'faker'."
+                                "generator() must take exactly 1 arg: 'columns'."
                             )
                         for deco in node.decorator_list:
                             if (
@@ -320,8 +335,9 @@ class Populator:
         cache: dict[str, Any] | None = None,
     ) -> list:
         def satisfy_s_unique(rows: list) -> list:
+            seen = set()
+            unique_row = [row for row in rows if not (row in seen or seen.add(row))]
             if c_spec.name in table_meta.s_uniques:
-                set_rows = set(rows)
                 cache_key = f"forbidden.{table_meta.name}.{c_spec.name}"
                 if cache is not None:
                     if cache_key in cache:
@@ -330,8 +346,8 @@ class Populator:
                         forbidden = cache[cache_key] = set(
                             dbm.get_existing_values(table_meta.name, c_spec.name)
                         )
-                    return list(set_rows.difference(forbidden))
-            return rows
+                    return [row for row in unique_row if row not in forbidden]
+            return unique_row
 
         return satisfy_s_unique(rows)
 

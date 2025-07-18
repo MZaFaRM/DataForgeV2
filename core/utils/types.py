@@ -40,7 +40,7 @@ class ColumnSpec(BaseModel):
     name: str
     null_chance: float
     generator: Optional[str] = None
-    type: Literal["faker", "regex", "foreign", "auto"]
+    type: Literal["faker", "regex", "foreign", "python", "auto"]
 
 
 class TableSpec(BaseModel):

@@ -1,5 +1,14 @@
 import { log } from "console"
-import { Dispatch, SetStateAction, useEffect, useRef, useState } from "react"
+import {
+  Dispatch,
+  memo,
+  SetStateAction,
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react"
 import {
   invokeClearLogs,
   invokeGetLogs,
@@ -131,17 +140,17 @@ export default function InsertionPanel({
     insertTabRef.current?.scrollTo({
       top: 0,
       left: 0,
-      behavior: "smooth",
+      behavior: "auto",
     })
     previewTabRef.current?.scrollTo({
       top: 0,
       left: 0,
-      behavior: "smooth",
+      behavior: "auto",
     })
     logTabRef.current?.scrollTo({
       top: logTabRef.current.scrollHeight,
       left: 0,
-      behavior: "smooth",
+      behavior: "auto",
     })
   }, [activeTable, dbData])
 
@@ -173,7 +182,7 @@ export default function InsertionPanel({
           acc[col.name] = {
             name: col.name,
             nullChance: 0,
-            method: null,
+            generator: null,
             type: "faker",
           }
           return acc
@@ -388,6 +397,7 @@ export default function InsertionPanel({
           {tableData && tableData.columns && globalSpecs[tableData.name] ? (
             <div className="h-full w-full">
               <div
+                key={activeTable}
                 ref={insertTabRef}
                 className={cn(
                   "h-full w-full overflow-auto",
@@ -633,9 +643,7 @@ function RenderPreview({
 
     const messages = Object.entries(errorMaps)
       .map(([col, errs]) =>
-        errs
-          .map((e) => `• ${col}: ${e.specific ?? e.generic ?? "Unknown"}`)
-          .join("\n")
+        errs.map((e) => `• ${col}: ${e.msg ?? "Unknown"}`).join("\n")
       )
       .join("\n")
 
@@ -686,7 +694,7 @@ function RenderPreview({
                 <TableHead
                   title={
                     errorMaps && Object.hasOwn(errorMaps, column)
-                      ? errorMaps[column].map((e) => e.specific).join(", ")
+                      ? errorMaps[column].map((e) => e.msg).join(", ")
                       : ""
                   }
                   key={column}
@@ -803,7 +811,7 @@ interface DBColumnProps {
   setHoveredGroup: (group: string[] | null) => void
 }
 
-function DBColumn({
+const DBColumn = memo(function DBColumn({
   column,
   columnSpec,
   setColumnSpec,
@@ -812,10 +820,6 @@ function DBColumn({
   hoveredGroup,
   setHoveredGroup,
 }: DBColumnProps) {
-  const [baseSelect, setBaseSelect] = useState<BaseSelectType>("faker")
-  const [advancedSelect, setAdvanceSelect] = useState<string | null>(null)
-  const [nullProbability, setNullProbability] = useState(0)
-
   const thisGroups = uniqueGroups.filter((g) => g.includes(column.name))
   const inHovered = hoveredGroup?.includes(column.name)
 
@@ -833,58 +837,42 @@ function DBColumn({
               ? "is unique"
               : ""
 
-  useEffect(() => {
-    setColumnSpec({
-      name: column.name,
-      nullChance: nullProbability / 10,
-      method: advancedSelect,
-      type: baseSelect,
-    })
-  }, [baseSelect, advancedSelect, nullProbability])
-
-  useEffect(() => {
-    if (columnSpec) {
-      setBaseSelect(columnSpec.type)
-      setAdvanceSelect(columnSpec.method)
-      setNullProbability(columnSpec.nullChance / 10)
-    }
-  }, [])
-
   return (
     <TableRow
-      key={column.name}
       onMouseEnter={() => setHoveredGroup(thisGroups[0] ?? null)}
       onMouseLeave={() => setHoveredGroup(null)}
     >
-      <TableCell
-        className={cn(
-          "flex items-center",
-          inHovered && "font-medium text-lime-500",
-          column.primaryKey && "text-purple-500"
-        )}
-      >
-        {column.name}
-        <div className="ml-2 flex items-center space-x-1">
-          {column.primaryKey ? (
-            <div className="rounded border p-1 text-xs font-medium text-current">
-              PK
-            </div>
-          ) : thisGroups.length == 1 ? (
-            <div className="rounded border p-1 text-xs font-medium text-current">
-              UQ
-            </div>
-          ) : (
-            thisGroups.length > 1 && (
+      <TableCell>
+        <div
+          className={cn(
+            "flex items-center",
+            inHovered && "font-medium text-lime-500",
+            column.primaryKey && "text-purple-500"
+          )}
+        >
+          {column.name}
+          <div className="ml-2 flex items-center space-x-1">
+            {column.primaryKey ? (
               <div className="rounded border p-1 text-xs font-medium text-current">
-                UQG
+                PK
               </div>
-            )
-          )}
-          {!column.nullable && (
-            <div className="rounded border p-1 text-xs font-medium text-current">
-              NN
-            </div>
-          )}
+            ) : thisGroups.length == 1 ? (
+              <div className="rounded border p-1 text-xs font-medium text-current">
+                UQ
+              </div>
+            ) : (
+              thisGroups.length > 1 && (
+                <div className="rounded border p-1 text-xs font-medium text-current">
+                  UQG
+                </div>
+              )
+            )}
+            {!column.nullable && (
+              <div className="rounded border p-1 text-xs font-medium text-current">
+                NN
+              </div>
+            )}
+          </div>
         </div>
       </TableCell>
 
@@ -893,15 +881,17 @@ function DBColumn({
       {/* <TableCell>
         <RenderNullChanceControl
           nullReason={nullReason}
-          nullProbability={nullProbability}
-          setNullProbability={setNullProbability}
+          nullProbability={columnSpec.nullChance * 10}
+          setNullProbability={(val) =>
+            setColumnSpec({ ...columnSpec, nullChance: val / 10 })
+          }
         />
       </TableCell> */}
 
       <TableCell>
         <BaseFillSelect
-          selected={baseSelect}
-          setSelected={setBaseSelect}
+          selected={columnSpec.type}
+          setSelected={(val) => setColumnSpec({ ...columnSpec, type: val })}
           column={column}
         />
       </TableCell>
@@ -909,16 +899,19 @@ function DBColumn({
       <TableCell>
         <AdvancedFillSelect
           column={column}
-          baseSelect={baseSelect}
-          selected={advancedSelect}
-          setSelected={setAdvanceSelect}
+          baseSelect={columnSpec.type}
+          selected={columnSpec.generator}
+          setSelected={(val) =>
+            setColumnSpec({ ...columnSpec, generator: val })
+          }
           fakerMethods={fakerMethods}
         />
       </TableCell>
+
       <TableCell></TableCell>
     </TableRow>
   )
-}
+})
 
 interface RenderNullChanceControlProps {
   nullReason: string
@@ -993,7 +986,21 @@ interface BaseFillSelectProps {
   column: ColumnData
 }
 
-function BaseFillSelect({ setSelected, column }: BaseFillSelectProps) {
+function BaseFillSelect({
+  selected,
+  setSelected,
+  column,
+}: BaseFillSelectProps) {
+  const forced = column.foreignKeys?.table
+    ? "foreign"
+    : column.autoincrement
+      ? "autoincrement"
+      : column.computed
+        ? "computed"
+        : selected
+
+  const disabled = forced !== selected
+
   type view =
     | "faker"
     | "regex"
@@ -1002,23 +1009,15 @@ function BaseFillSelect({ setSelected, column }: BaseFillSelectProps) {
     | "computed"
     | "python"
 
-  const [selectDisabled, setSelectDisabled] = useState(false)
   const [baseView, setBaseView] = useState<view>("faker")
 
   useEffect(() => {
     if (column?.foreignKeys?.table) {
       setBaseView("foreign")
-      setSelectDisabled(true)
     } else if (column.autoincrement) {
       setBaseView("autoincrement")
-      setSelectDisabled(true)
     } else if (column.computed) {
       setBaseView("computed")
-      setSelectDisabled(true)
-    } else if (column.type.includes("VARCHAR")) {
-      setBaseView("faker")
-    } else {
-      setBaseView("faker")
     }
   }, [])
 
@@ -1031,8 +1030,11 @@ function BaseFillSelect({ setSelected, column }: BaseFillSelectProps) {
   }, [baseView])
 
   return (
-    <Select value={baseView} onValueChange={(val) => setBaseView(val as view)}>
-      <SelectTrigger className="w-[180px]" disabled={selectDisabled}>
+    <Select
+      value={selected}
+      onValueChange={(val) => setSelected(val as BaseSelectType)}
+    >
+      <SelectTrigger className="w-[180px]" disabled={disabled}>
         <SelectValue placeholder="Choose view" />
       </SelectTrigger>
 
@@ -1121,6 +1123,10 @@ function AdvancedFillSelect({
   const [open, setOpen] = useState(false)
   const { theme } = useTheme()
 
+  useEffect(() => {
+    setSelected(null)
+  }, [baseSelect])
+
   return baseSelect === "faker" ? (
     <Popover open={open} onOpenChange={setOpen}>
       <PopoverTrigger asChild>
@@ -1200,14 +1206,28 @@ function AdvancedFillSelect({
   ) : baseSelect === "python" ? (
     <div className="overflow-auto rounded border">
       <CodeMirror
-        placeholder={"# Python Function"}
-        value={selected ?? ""}
-        extensions={[python(), EditorView.lineWrapping]}
+        placeholder={
+          "# import builtins + faker\n" +
+          "# Py fields run after faker/foreign/regex/etc\n" +
+          "# @order(int) → set execution order\n" +
+          "# def generator(columns):\n" +
+          '#   return columns["name"].lower() + "@x.com"\n\n'
+        }
+        value={
+          selected ||
+          "# import builtins + faker\n" +
+            "# Py fields run after faker/foreign/regex/etc\n" +
+            "# @order(int) → set execution order\n" +
+            "# def generator(columns):\n" +
+            '#   return columns["name"].lower() + "@x.com"\n'
+        }
+        onChange={(value) => setSelected(value)}
+        extensions={[python()]}
         theme={theme === "light" ? githubLight : githubDark}
         height="auto"
         minHeight="35px"
         maxHeight="200px"
-        className="w-150"
+        maxWidth="350px"
         basicSetup={{
           lineNumbers: false,
           foldGutter: false,

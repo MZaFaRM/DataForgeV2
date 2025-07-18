@@ -1,5 +1,5 @@
 import sys
-from core.populator import Runner
+from core.main import Runner
 
 if __name__ == "__main__":
     if "--debug" in sys.argv:

@@ -36,7 +36,7 @@ export default function RenderLogs({ activeTab }: { activeTab?: string }) {
         if (success) {
           setLogs([])
           toast({
-            variant: "default",
+            variant: "success",
             title: "Logs cleared successfully",
           })
         } else {

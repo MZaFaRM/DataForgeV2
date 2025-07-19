@@ -178,7 +178,7 @@ export default function InsertionPanel({
       .then((success) => {
         if (success) {
           toast({
-            variant: "default",
+            variant: "success",
             title: "SQL executed successfully",
           })
           setPendingRefresh(true)

@@ -62,7 +62,6 @@ class Populator:
     ) -> tuple[list[ErrorPacket], list[list[str]]]:
 
         metadata = dbm.get_table_metadata(table_spec.name)
-        cache = {}
         errors = []
         column_values: dict[str, list[str]] = {
             col.name: [""] * table_spec.no_of_entries for col in table_spec.columns
@@ -81,7 +80,6 @@ class Populator:
                     make_func=make_func,
                     rows=table_spec.no_of_entries,
                     entries=column_values,
-                    cache=cache,
                 )
 
                 limit = min(len(generated_rows), table_spec.no_of_entries)
@@ -110,11 +108,24 @@ class Populator:
         return errors, list(map(list, zip(*column_values.values())))
 
     @dataclass
-    class ColumnContext:
-        col_meta: ColumnMetadata
+    class Context:
+        dbm: DatabaseManager
+        table: TableMetadata
         col_spec: ColumnSpec
         n: int
         entries: dict[str, list[str]] | None = None
+
+        @property
+        def column(self) -> ColumnMetadata:
+            if self.table is None or self.col_spec is None:
+                raise ValueError("Table or column specification is missing.")
+            return self.table.get_column(self.col_spec.name)
+
+        @property
+        def cache(self) -> dict[str, Any]:
+            if not hasattr(self, "_cache"):
+                self._cache = {}
+            return self._cache
 
     # region make functions
     def get_make_func(self, col_spec: ColumnSpec):
@@ -129,12 +140,12 @@ class Populator:
 
         raise ValueError(f"Unknown type `{col_spec.type}` for column `{col_spec.name}`")
 
-    def make_faker(self, context: ColumnContext) -> list:
+    def make_faker(self, context: Context) -> list:
         assert context.col_spec.generator, "Faker generator is not specified."
         faker_fn = getattr(self.faker, context.col_spec.generator)
-        return self._sample_values(context.n, faker_fn, context.col_meta)
+        return self._sample_values(context.n, faker_fn, context.column)
 
-    def make_python(self, context: ColumnContext) -> list:
+    def make_python(self, context: Context) -> list:
         if not context.col_spec.generator:
             return []
 
@@ -161,7 +172,7 @@ class Populator:
 
             # Call the generator function
             gen = env["generator"]
-            col = context.col_meta
+            col = context.column
 
             rows = []
             for idx in range(context.n):
@@ -179,12 +190,27 @@ class Populator:
         except SyntaxError as e:
             raise VerificationError(f"Syntax Error in Python script: {e}")
 
-    def make_regex(self, context: ColumnContext) -> list:
+    def make_regex(self, context: Context) -> list:
         regex_fn = lambda: rstr.xeger(context.col_spec.generator or "")
-        return self._sample_values(context.n, regex_fn, context.col_meta)
+        return self._sample_values(context.n, regex_fn, context.column)
 
-    def make_foreign(self, context: ColumnContext) -> list:
-        raise NotImplementedError("Foreign key generation is not implemented yet.")
+    def make_foreign(self, context: Context) -> list:
+        column = context.column
+        fk = column.foreign_keys
+        cache = context.cache
+        dbm = context.dbm
+
+        if not fk:
+            raise ValueError(f"No foreign key reference for column {column.name}")
+
+        if not f"{fk.table}.{fk.column}" in cache:
+            cache[f"{fk.table}.{fk.column}"] = dbm.get_existing_values(
+                fk.table, fk.column
+            )
+
+        rows = cache[f"{fk.table}.{fk.column}"]
+
+        return rows
 
     # endregion
 
@@ -213,32 +239,26 @@ class Populator:
         make_func: Callable,
         rows: int,
         entries: dict[str, list[str]],
-        cache: dict[str, Any] | None = None,
     ) -> list:
         max_attempts = 10
         generated_rows = []
-        col_meta = table_meta.get_column(col_spec.name)
-        assert col_meta, f"Column {col_spec.name} not found in table {table_meta.name}"
 
-        context = self.ColumnContext(
-            col_meta=col_meta,
+        context = self.Context(
+            dbm=dbm,
+            table=table_meta,
             col_spec=col_spec,
             n=rows,
             entries=entries if entries else None,
         )
+        column = context.column
 
         for _ in range(max_attempts):
-            generated_rows = make_func(context=context)
-
-            generated_rows = self._filter_rows(
-                dbm=dbm,
-                table_meta=table_meta,
-                c_spec=col_spec,
-                rows=generated_rows,
-                cache=cache,
-            )
+            generated_rows: list[str] = make_func(context=context)
+            generated_rows = self._filter_rows(context=context, rows=generated_rows)
 
             if len(generated_rows) >= rows:
+                break
+            elif column.foreign_keys:
                 break
 
         return generated_rows
@@ -284,7 +304,7 @@ class Populator:
             re.compile(generator)
 
         def check_foreign(generator: str):
-            raise NotImplementedError()
+            return True
 
         type_handlers = {
             "faker": check_faker,
@@ -313,6 +333,14 @@ class Populator:
                     groups[ctype].append(c_spec)
                 else:
                     raise ValueError(f"Unsupported column type: {ctype}")
+            except ValidationWarning as e:
+                errors.append(
+                    ErrorPacket(
+                        column=c_spec.name,
+                        type="warning",
+                        msg=f"Validation warning for column '{c_spec.name}': {str(e)}",
+                    )
+                )
             except Exception as e:
                 errors.append(
                     ErrorPacket(
@@ -330,33 +358,30 @@ class Populator:
         )
         return errors, result
 
-    def _filter_rows(
-        self,
-        dbm: DatabaseManager,
-        table_meta: TableMetadata,
-        c_spec: ColumnSpec,
-        rows: list,
-        cache: dict[str, Any] | None = None,
-    ) -> list:
+    def _filter_rows(self, context: Context, rows: list[str]) -> list[str]:
         filtered_rows = rows
+        table = context.table
+        col_spec = context.col_spec
+        cache = context.cache
+        dbm = context.dbm
 
-        def satisfy_unique(rows: list) -> list:
+        def satisfy_unique(rows: list[str]) -> list[str]:
             seen = set()
             unique_row = [row for row in rows if not (row in seen or seen.add(row))]
-            cache_key = f"forbidden.{table_meta.name}.{c_spec.name}"
+            cache_key = f"{table.name}.{col_spec.name}"
             if cache is not None:
                 if cache_key in cache:
                     forbidden = cache[cache_key]
                 else:
                     forbidden = cache[cache_key] = set(
-                        dbm.get_existing_values(table_meta.name, c_spec.name)
+                        dbm.get_existing_values(table.name, col_spec.name)
                     )
                 return [row for row in unique_row if row not in forbidden]
 
             return unique_row
 
-        col_md = table_meta.get_column(c_spec.name)
-        assert col_md, f"Column {c_spec.name} not found in table {table_meta.name}"
+        col_md = table.get_column(col_spec.name)
+        assert col_md, f"Column {col_spec.name} not found in table {table.name}"
         if col_md.unique:
             filtered_rows = satisfy_unique(filtered_rows)
 

@@ -17,7 +17,7 @@ class ColumnMetadata(BaseModel):
     default: Optional[str] = None
     autoincrement: bool
     computed: bool
-    foreign_keys: ForeignKeyRef
+    foreign_keys: Optional[ForeignKeyRef] = None
     length: Optional[int] = None
     precision: Optional[int] = None
     scale: Optional[int] = None
@@ -32,8 +32,11 @@ class TableMetadata(BaseModel):
     def column_map(self) -> dict[str, ColumnMetadata]:
         return {col.name: col for col in self.columns}
 
-    def get_column(self, name: str) -> Optional[ColumnMetadata]:
-        return self.column_map.get(name)
+    def get_column(self, name: str) -> ColumnMetadata:
+        column = self.column_map.get(name)
+        if column is None:
+            raise ValueError(f"Column '{name}' not found in table '{self.name}'.")
+        return column
 
 
 class ColumnSpec(BaseModel):

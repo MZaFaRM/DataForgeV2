@@ -312,15 +312,14 @@ class DatabaseManager:
         return fk_map
 
     @requires("engine")
-    def get_existing_values(self, table: str, column: str):
-        values = set()
+    def get_existing_values(self, table: str, column: str) -> list[str]:
         with self.engine.connect() as conn:
             result = conn.execute(
                 sql_text(
                     f"SELECT `{column}` FROM `{table}` WHERE `{column}` IS NOT NULL"
                 )
             )
-            values = set(row[0] for row in result)
+            values = [row[0] for row in result]
         return values
 
     @requires("engine")

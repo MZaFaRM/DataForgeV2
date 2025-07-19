@@ -1,11 +1,7 @@
-import { Icon } from "@iconify/react"
 import { useEffect, useState } from "react"
+import { Icon } from "@iconify/react"
 
-import {
-  ErrorPacketMap,
-  TableMetadata,
-  TablePacket
-} from "@/components/types"
+import { cn } from "@/lib/utils"
 import {
   Popover,
   PopoverContent,
@@ -20,7 +16,7 @@ import {
   TableRow,
 } from "@/components/ui/table"
 import { toast } from "@/components/ui/use-toast"
-import { cn } from "@/lib/utils"
+import { ErrorPacketMap, TableMetadata, TablePacket } from "@/components/types"
 
 interface RenderPreviewProps {
   tableMetadata: TableMetadata
@@ -38,37 +34,49 @@ export default function RenderPreview({
   setNoOfRows,
 }: RenderPreviewProps) {
   const [dice, setDice] = useState<number>(1)
-  const [errorMaps, setErrorMaps] = useState<ErrorPacketMap | null>(null)
-
-  useEffect(() => {
-    if (!errorMaps || Object.keys(errorMaps).length === 0) return
-
-    const messages = Object.entries(errorMaps)
-      .map(([col, errs]) =>
-        errs.map((e) => `• ${col}: ${e.msg ?? "Unknown"}`).join("\n")
-      )
-      .join("\n")
-
-    toast({
-      variant: "destructive",
-      title: "Errors found",
-      description: <pre className="whitespace-pre-wrap">{messages}</pre>,
-      duration: 4000,
-    })
-  }, [errorMaps])
+  const [errorCols, setErrorCols] = useState<Record<string, string>>({})
+  const [warnCols, setWarningCols] = useState<Record<string, string>>({})
 
   useEffect(() => {
     if (tablePackets) {
-      const newErrorMaps: ErrorPacketMap = {}
+      const errCol: Record<string, string> = {}
+      const warnCol: Record<string, string> = {}
+
       tablePackets.errors.forEach((error) => {
         if (error.column) {
-          if (!newErrorMaps[error.column]) {
-            newErrorMaps[error.column] = []
+          if (error.type == "error") {
+            errCol[error.column] = error.msg ?? "Unknown"
+          } else if (error.type == "warning") {
+            warnCol[error.column] = error.msg ?? "Unknown"
           }
-          newErrorMaps[error.column].push(error)
         }
       })
-      setErrorMaps(newErrorMaps)
+
+      setErrorCols(errCol)
+      setWarningCols(warnCol)
+
+      if (Object.keys(warnCol).length > 0) {
+        toast({
+          variant: "warning",
+          title: "Warnings found",
+          description: (
+            <pre className="whitespace-pre-wrap">
+              {Object.values(warnCol).join("\n")}
+            </pre>
+          ),
+        })
+      }
+      if (Object.keys(errCol).length > 0) {
+        toast({
+          variant: "destructive",
+          title: "Errors found",
+          description: (
+            <pre className="whitespace-pre-wrap">
+              {Object.values(errCol).join("\n")}
+            </pre>
+          ),
+        })
+      }
     }
   }, [tablePackets])
 
@@ -94,16 +102,14 @@ export default function RenderPreview({
               tablePackets.columns.map((column) => (
                 <TableHead
                   title={
-                    errorMaps && Object.hasOwn(errorMaps, column)
-                      ? errorMaps[column].map((e) => e.msg).join(", ")
-                      : ""
+                    (errorCols && errorCols[column]) ||
+                    (warnCols && warnCols[column])
                   }
                   key={column}
                   className={cn(
                     "bg-purple-400 text-center text-black",
-                    errorMaps &&
-                      Object.hasOwn(errorMaps, column) &&
-                      "bg-red-400"
+                    warnCols[column] && "bg-yellow-400",
+                    errorCols[column] && "bg-red-400"
                   )}
                 >
                   {column}
@@ -124,15 +130,14 @@ export default function RenderPreview({
                 <TableRow key={`${name}.${rowIndex}`}>
                   {Array.from({ length: colCount }).map((_, colIndex) => {
                     const columnName = columns[colIndex]
-                    const hasError =
-                      errorMaps && Object.hasOwn(errorMaps, columnName)
 
                     return (
                       <TableCell
                         key={`${name}.${colIndex}.${rowIndex}`}
                         className={cn(
                           "w-[50px] whitespace-nowrap text-center",
-                          hasError && "border-x border-red-400"
+                          warnCols[columnName] && "border-x-2 border-yellow-600",
+                          errorCols[columnName] && "border-x-2 border-red-600"
                         )}
                       >
                         <div className="max-w-full">

@@ -58,7 +58,11 @@ export default function DashboardPage() {
                 would mean a lot.
               </p>
             </div>
-            <ConnectionStatus dbData={dbData} setDbData={setDbData} />
+            <ConnectionStatus
+              dbList={[]}
+              dbData={dbData}
+              setDbData={setDbData}
+            />
           </div>
           <div className="flex flex-row space-y-4">
             <ListTables

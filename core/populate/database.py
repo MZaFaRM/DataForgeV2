@@ -12,7 +12,7 @@ from sqlalchemy.engine.reflection import Inspector
 
 from core.utils.decorators import requires
 from core.utils.exceptions import MissingRequiredAttributeError
-from core.utils.types import ColumnMetadata, ForeignKeyRef, TableMetadata
+from core.utils.types import ColumnMetadata, DbCredsSchema, ForeignKeyRef, TableMetadata
 
 
 class DatabaseManager:
@@ -36,15 +36,27 @@ class DatabaseManager:
             "user": self.user,
             "port": self.port,
             "name": self.name,
-            "connected": self.connected,
         }
+
+    def to_schema(self) -> DbCredsSchema:
+        return DbCredsSchema(
+            name=self.name,
+            host=self.host,
+            port=self.port,
+            user=self.user,
+            password=self.password,
+        )
+
+    def from_schema(self, schema: DbCredsSchema) -> None:
+        for attr in ["host", "user", "port", "name", "password"]:
+            setattr(self, attr, getattr(schema, attr, None))
 
     def setup_logging(self, log_path: str = "sqlalchemy.log"):
         logger = logging.getLogger("sqlalchemy.engine")
         logger.setLevel(logging.INFO)
         logger.propagate = False  # Prevent console spam
 
-        file_handler = logging.FileHandler(log_path, mode="w")
+        file_handler = logging.FileHandler(f"{self.name}.{log_path}", mode="w")
         file_handler.setLevel(logging.INFO)
         formatter = logging.Formatter("%(asctime)s [%(levelname)s] %(message)s")
         file_handler.setFormatter(formatter)
@@ -54,17 +66,19 @@ class DatabaseManager:
     def read_logs(
         self, log_path: str = "sqlalchemy.log", lines: int = 100
     ) -> list[str]:
-        if not os.path.exists(log_path):
+        log_file = f"{self.name}.{log_path}"
+        if not os.path.exists(log_file):
             return []
 
-        with open(log_path, "r") as f:
+        with open(log_file, "r") as f:
             logs = f.readlines()[-lines:]
 
         return [log.strip() for log in logs]
 
     def clear_logs(self, log_path: str = "sqlalchemy.log"):
-        if os.path.exists(log_path):
-            with open(log_path, "w") as f:
+        log_file = f"{self.name}.{log_path}"
+        if os.path.exists(log_file):
+            with open(log_file, "w") as f:
                 f.write("")
 
     @property

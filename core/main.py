@@ -4,7 +4,8 @@ import threading
 import traceback
 from typing import Any
 
-from core.utils.types import TableSpec
+from core.populate.config import ConfigHandler
+from core.utils.types import DbCredsSchema, TableSpec
 
 from core.populate.populator import Populator
 from core.populate.database import DatabaseManager
@@ -15,6 +16,7 @@ class Runner:
     def __init__(self):
         self.dbm = DatabaseManager()
         self.populator = Populator()
+        self.configs = ConfigHandler()
 
     def listen(self):
         for line in sys.stdin:
@@ -72,7 +74,7 @@ class Runner:
         missing = [k for k in required if not creds.get(k)]
 
         for k in required:
-            setattr(self.dbm, k, creds.get(k, ""))
+            setattr(self.dbm, k, str(creds.get(k, "")))
 
         if missing:
             msg = (
@@ -85,8 +87,41 @@ class Runner:
         self.dbm.create_url()
         self.dbm.create_engine()
         self.dbm.test_connection()
-
+        self.configs.save_cred(self.dbm.to_schema())
         return self._ok(self.dbm.to_dict())
+
+    def _handle_reconnect(self, body: dict):
+        if not body:
+            return self._err("DB details needed.")
+        name, host, port = (body.get(cred, None) for cred in ("name", "host", "port"))
+        if name is None or host is None or port is None:
+            return self._err("Requires name, host and port to reconnect")
+
+        creds_schema = self.configs.load_cred(name=name, host=host, port=port)
+        if not creds_schema:
+            return self._err("No DB with that credentials found.")
+
+        self.dbm = DatabaseManager()
+        self.dbm.from_schema(creds_schema)
+        self.dbm.create_url()
+        self.dbm.create_engine()
+        self.dbm.test_connection()
+        return self._ok("Reconnected successfully.")
+
+    def _handle_list_connections(self, _=None) -> dict:
+        creds = self.configs.list_creds()
+        serializable = [list(row) for row in creds]
+        return self._ok(serializable)
+
+    def _handle_delete_connection(self, body: dict) -> dict:
+        if not body:
+            return self._err("DB details needed.")
+        name, host, port = (body.get(cred, None) for cred in ("name", "host", "port"))
+        if name is None or host is None or port is None:
+            return self._err("Requires name, host and port to delete connection")
+
+        self.configs.delete_cred(name=name, host=host, port=port)
+        return self._ok("Connection deleted successfully.")
 
     def _handle_disconnect(self, _=None) -> dict:
         self.dbm = DatabaseManager()

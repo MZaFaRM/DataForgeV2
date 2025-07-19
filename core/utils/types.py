@@ -63,3 +63,13 @@ class TablePacket(BaseModel):
     columns: list[str]
     entries: list[list[str]]
     errors: list[ErrorPacket]
+
+
+class DbCredsSchema(BaseModel):
+    name: str
+    host: str
+    port: str
+    user: str
+    password: str
+
+    model_config = {"from_attributes": True}

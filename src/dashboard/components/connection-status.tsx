@@ -7,10 +7,25 @@ import {
   DropdownMenuItem,
   DropdownMenuSeparator,
 } from "@radix-ui/react-dropdown-menu"
+import {
+  CaretSortIcon,
+  CheckIcon,
+  PlusCircledIcon,
+} from "@radix-ui/react-icons"
 import { Eye, EyeOff } from "lucide-react"
 
 import { cn } from "@/lib/utils"
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { Button } from "@/components/ui/button"
+import {
+  Command,
+  CommandEmpty,
+  CommandGroup,
+  CommandInput,
+  CommandItem,
+  CommandList,
+  CommandSeparator,
+} from "@/components/ui/command"
 import {
   Dialog,
   DialogContent,
@@ -18,45 +33,84 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
+  DialogTrigger,
 } from "@/components/ui/dialog"
 import { DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover"
 import { Icons } from "@/components/icons"
 import { DbData } from "@/components/types"
 
-interface ConnectionStatusProps {
+interface ConnectionSelectorProps {
+  dbList: DbData[]
   dbData: DbData | null
   setDbData: (info: DbData | null) => void
 }
 
-export default function ConnectionStatus({
+export default function ConnectionSelector({
+  dbList,
   dbData,
   setDbData,
-}: ConnectionStatusProps) {
-  const [showConnectDBDialog, setShowConnectDBDialog] = useState<boolean>(false)
+}: ConnectionSelectorProps) {
+  const [showDialog, setShowDialog] = useState(false)
+  const [open, setOpen] = useState(false)
   const [newDbInfo, setNewDbInfo] = useState<DbData | null>(null)
-  const [dbConnecting, setDbConnecting] = useState<boolean>(false)
-  const [showPassword, setShowPassword] = useState<boolean>(false)
+  const [dbConnecting, setDbConnecting] = useState(false)
   const [errorField, setErrorField] = useState<string | null>(null)
-  const [refreshIcon, setRefreshIcon] = useState<
-    "line-md:check-all" | "mdi:refresh-circle"
-  >("mdi:refresh-circle")
+  const [showPassword, setShowPassword] = useState(false)
+  const [menuWidth, setMenuWidth] = useState<number | null>(null)
 
   const triggerRef = useRef<HTMLButtonElement>(null)
-  const [menuWidth, setMenuWidth] = useState<number | null>(null)
+
+  useEffect(() => {
+    fetchDbInfo()
+
+    setTimeout(() => {
+      if (triggerRef.current) {
+        setMenuWidth(triggerRef.current.offsetWidth)
+      }
+    }, 1000)
+  }, [])
+
+  useEffect(() => {
+    if (triggerRef.current) {
+      setMenuWidth(triggerRef.current.offsetWidth)
+    }
+  }, [dbData])
+
+  const handleErrorField = (error: string) => {
+    if (
+      error.includes("Access denied for user") &&
+      error.includes("(using password: YES)")
+    ) {
+      setErrorField("password")
+      return "Invalid password for the user."
+    } else if (error.includes("Can't connect to MySQL server")) {
+      return "Unable to connect to the MySQL server. Please check the host and port."
+    } else if (error.includes("Unknown database")) {
+      setErrorField("name")
+      return "The specified database does not exist."
+    } else if (error.includes("Access denied for user")) {
+      setErrorField("user")
+      return "Invalid user credentials."
+    } else if (error.includes("Connection refused")) {
+      setErrorField("host")
+      return "Connection refused. Please check the host and port."
+    }
+    return error
+  }
 
   function fetchDbInfo() {
     setDbConnecting(true)
 
     invokeDbInfo().then((payload) => {
       setDbData({ ...payload })
-      setRefreshIcon("line-md:check-all")
       setDbConnecting(false)
-
-      setTimeout(() => {
-        setRefreshIcon("mdi:refresh-circle")
-      }, 3000)
     })
   }
 
@@ -80,7 +134,7 @@ export default function ConnectionStatus({
 
           setTimeout(() => {
             setNewDbInfo(null)
-            setShowConnectDBDialog(false)
+            setShowDialog(false)
           }, 1000)
         } else {
           throw new Error("Connection failed")
@@ -107,161 +161,137 @@ export default function ConnectionStatus({
       })
   }
 
-  function handleDisconnect() {
-    invokeDbDisconnect()
-      .then(() => {
-        setDbData(null)
-        setShowConnectDBDialog(false)
-      })
-      .catch((error) => {
-        console.error("Disconnection error:", error)
-      })
-  }
-
-  function handleErrorField(error: string) {
-    if (
-      error.includes("Access denied for user") &&
-      error.includes("(using password: YES)")
-    ) {
-      setErrorField("password")
-      return "Invalid password for the user."
-    } else if (error.includes("Can't connect to MySQL server")) {
-      return "Unable to connect to the MySQL server. Please check the host and port."
-    } else if (error.includes("Unknown database")) {
-      setErrorField("name")
-      return "The specified database does not exist."
-    } else if (error.includes("Access denied for user")) {
-      setErrorField("user")
-      return "Invalid user credentials."
-    } else if (error.includes("Connection refused")) {
-      setErrorField("host")
-      return "Connection refused. Please check the host and port."
-    }
-    return error
-  }
-
-  useEffect(() => {
-    fetchDbInfo()
-
-    setTimeout(() => {
-      if (triggerRef.current) {
-        setMenuWidth(triggerRef.current.offsetWidth)
-      }
-    }, 1000)
-  }, [])
-
-  useEffect(() => {
-    if (triggerRef.current) {
-      setMenuWidth(triggerRef.current.offsetWidth)
-    }
-  }, [dbData])
-
   return (
-    <Dialog open={showConnectDBDialog} onOpenChange={setShowConnectDBDialog}>
-      <DropdownMenu>
-        <DropdownMenuTrigger asChild>
-          <button
-            className="flex items-center justify-between rounded border px-4 py-2 hover:bg-accent hover:text-accent-foreground"
+    <Dialog open={showDialog} onOpenChange={setShowDialog}>
+      <Popover open={open} onOpenChange={setOpen}>
+        <PopoverTrigger asChild>
+          <Button
+            variant="outline"
+            role="combobox"
+            aria-expanded={open}
+            className="w-[200px]"
             ref={triggerRef}
           >
             {dbData?.connected ? (
               <>
-                <Icon
-                  icon="ix:circle-dot"
-                  className="animate-fade-in animate-fade-in mr-2 h-4 w-4 animate-pulse text-green-500"
-                />
-                <p>{dbData.name}</p>
+                <div>
+                  <Icon
+                    icon="ix:circle-dot"
+                    className="mr-2 h-4 w-4 animate-pulse text-green-500"
+                  />
+                </div>
+                <div className="truncate">
+                  <p className="truncate">{dbData.name}</p>
+                </div>
               </>
             ) : (
-              <>
+              <div className="flex items-center">
                 <Icon
                   icon="ix:circle-dot"
                   className="mr-2 h-4 w-4 text-red-500"
                 />
                 {"Not Connected"}
-              </>
+              </div>
             )}
             <div className="ml-auto">
               <Icon
-                icon="mdi:chevron-down"
+                icon="radix-icons:caret-sort"
                 className="ml-3 h-4 w-4 text-muted-foreground"
               />
             </div>
-          </button>
-        </DropdownMenuTrigger>
-
-        <DropdownMenuContent
-          align="start"
-          sideOffset={0}
-          style={{ width: menuWidth ? `${menuWidth}px` : undefined }}
-          className={cn(
-            "select-none rounded border border-t-0 bg-popover p-2 shadow",
-            // ❯ animations
-            "data-[state=open]:animate-in data-[state=open]:fade-in",
-            "data-[state=open]:slide-in-from-top-1/2"
-          )}
-        >
-          <DropdownMenuItem
-            onSelect={(e) => {
-              e.preventDefault()
-              fetchDbInfo()
-            }}
-            className="group flex items-center overflow-hidden rounded-t border-b px-4 py-2  hover:bg-accent hover:text-accent-foreground"
-          >
-            <Icon
-              key={refreshIcon}
-              icon={refreshIcon}
-              className={cn(
-                "mr-2 h-4 w-4",
-                refreshIcon === "mdi:refresh-circle"
-                  ? "group-hover:animate-spin"
-                  : ""
-              )}
-            />
-            Refresh
-          </DropdownMenuItem>
-          <DropdownMenuItem
-            onSelect={() =>
-              !dbData?.connected
-                ? setShowConnectDBDialog(true)
-                : handleDisconnect()
-            }
-            className="group flex items-center rounded-b px-4 py-2 hover:bg-muted"
-          >
-            {dbData?.connected ? (
-              <>
+          </Button>
+        </PopoverTrigger>
+        <PopoverContent className="w-[200px] p-0">
+          <Command>
+            <CommandInput placeholder="Search connections..." />
+            <CommandEmpty>No DB found.</CommandEmpty>
+            <CommandSeparator />
+            <CommandGroup heading="Actions">
+              <CommandItem onSelect={fetchDbInfo}>
                 <Icon
-                  icon="ri:indeterminate-circle-fill"
-                  className="mr-2 h-4 w-4 text-red-500 group-hover:animate-pulse"
+                  icon="mdi:refresh"
+                  className={cn("mr-2 h-4 w-4", dbConnecting && "animate-spin")}
                 />
-                {"Terminate"}
-              </>
-            ) : (
-              <>
+                Refresh
+              </CommandItem>
+
+              <CommandItem
+                onSelect={(e) => {
+                  dbData?.connected &&
+                    invokeDbDisconnect().then(() => setDbData(null))
+                }}
+              >
+                <Icon icon="mdi:power" className="mr-2 h-4 w-4 text-red-500" />
+                Disconnect
+              </CommandItem>
+
+              <CommandItem
+                onSelect={(e) => {
+                  dbData?.connected &&
+                    invokeDbDisconnect().then(() => setDbData(null))
+                }}
+              >
                 <Icon
                   icon="solar:database-bold-duotone"
-                  className="mr-2 h-4 w-4 text-green-500 group-hover:animate-pulse"
+                  className="mr-2 h-4 w-4 text-red-500"
                 />
-                {"Connect"}
-              </>
-            )}
-          </DropdownMenuItem>
-          <DropdownMenuSeparator />
-        </DropdownMenuContent>
-      </DropdownMenu>
-      <DialogContent
-        className={cn(
-          // animations
-          "data-[state=open]:animate-in data-[state=open]:zoom-in-95 " +
-            "data-[state=open]:fade-in " +
-            "data-[state=closed]:animate-out data-[state=closed]:zoom-out-95 " +
-            "data-[state=closed]:fade-out"
-        )}
-      >
+                Remove
+              </CommandItem>
+            </CommandGroup>
+
+            <CommandGroup heading="Connections">
+              {dbList.map((conn) => (
+                <CommandItem
+                  key={conn.name}
+                  onSelect={() => {
+                    setDbData(conn)
+                    setOpen(false)
+                  }}
+                >
+                  <Icon
+                    icon="solar:database-bold-duotone"
+                    className={cn(
+                      "mr-2 h-4 w-4",
+                      conn.connected ? "text-green-500" : "text-red-500"
+                    )}
+                  />
+                  {conn.name}
+                  <CheckIcon
+                    className={cn(
+                      "ml-auto h-4 w-4",
+                      dbData?.name === conn.name ? "opacity-100" : "opacity-0"
+                    )}
+                  />
+                </CommandItem>
+              ))}
+            </CommandGroup>
+            <CommandSeparator />
+            <CommandList>
+              <CommandGroup>
+                <DialogTrigger asChild>
+                  <CommandItem
+                    onSelect={() => {
+                      setOpen(false)
+                      setShowDialog(true)
+                    }}
+                  >
+                    <Icon
+                      icon="mdi:plus-circle-outline"
+                      className="mr-2 h-4 w-4"
+                    />
+                    New Connection
+                  </CommandItem>
+                </DialogTrigger>
+              </CommandGroup>
+            </CommandList>
+          </Command>
+        </PopoverContent>
+      </Popover>
+      <DialogContent>
         <DialogHeader>
-          <DialogTitle>Connect to a Database</DialogTitle>
+          <DialogTitle>Create a DB Connection</DialogTitle>
           <DialogDescription>
-            Add a new database connection to insert sample data.
+            Fill the connection details to connect to a new database.
           </DialogDescription>
         </DialogHeader>
         <div>
@@ -383,10 +413,7 @@ export default function ConnectionStatus({
           )}
         </div>
         <DialogFooter>
-          <Button
-            variant="outline"
-            onClick={() => setShowConnectDBDialog(false)}
-          >
+          <Button variant="outline" onClick={() => setShowDialog(false)}>
             Cancel
           </Button>
           <Button

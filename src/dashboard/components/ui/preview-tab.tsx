@@ -158,11 +158,11 @@ export default function RenderPreview({
                       <TableCell
                         key={`${name}.${colIndex}.${rowIndex}`}
                         className={cn(
-                          "w-[50px] overflow-x-auto whitespace-nowrap",
+                          "w-[50px] whitespace-nowrap text-center",
                           hasError && "border-x border-red-400"
                         )}
                       >
-                        <div className="max-w-full overflow-x-auto">
+                        <div className="max-w-full">
                           {entries[rowIndex][colIndex]}
                         </div>
                       </TableCell>

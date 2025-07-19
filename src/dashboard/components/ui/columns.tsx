@@ -140,8 +140,6 @@ export default function DBColumn({
           fakerMethods={fakerMethods}
         />
       </TableCell>
-
-      <TableCell></TableCell>
     </TableRow>
   )
 }

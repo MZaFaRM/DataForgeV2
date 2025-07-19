@@ -1,7 +1,5 @@
-import {
-  invokeRunSql,
-  invokeTableData
-} from "@/api/db"
+import { useEffect, useRef, useState } from "react"
+import { invokeRunSql, invokeTableData } from "@/api/db"
 import { invokeGetFakerMethods, invokeVerifySpec } from "@/api/fill"
 import DBColumn from "@/dashboard/components/ui/columns"
 import RenderLogs from "@/dashboard/components/ui/log-tab"
@@ -10,9 +8,21 @@ import { sql } from "@codemirror/lang-sql"
 import { Icon } from "@iconify/react"
 import { githubDark, githubLight } from "@uiw/codemirror-theme-github"
 import CodeMirror, { EditorView } from "@uiw/react-codemirror"
+import { ta } from "date-fns/locale"
 import { useTheme } from "next-themes"
-import { useEffect, useRef, useState } from "react"
 
+import { cn } from "@/lib/utils"
+import { Badge } from "@/components/ui/badge"
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu"
+import { Table, TableBody } from "@/components/ui/table"
+import { Toaster } from "@/components/ui/toaster"
+import { TooltipProvider } from "@/components/ui/tooltip"
+import { toast } from "@/components/ui/use-toast"
 import {
   ColumnSpec,
   ColumnSpecMap,
@@ -21,23 +31,9 @@ import {
   TableMetadata,
   TablePacket,
   TableSpec,
-  TableSpecMap
+  TableSpecEntry,
+  TableSpecMap,
 } from "@/components/types"
-import { Badge } from "@/components/ui/badge"
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu"
-import {
-  Table,
-  TableBody
-} from "@/components/ui/table"
-import { Toaster } from "@/components/ui/toaster"
-import { TooltipProvider } from "@/components/ui/tooltip"
-import { toast } from "@/components/ui/use-toast"
-import { cn } from "@/lib/utils"
 
 interface InsertionPanelProps {
   dbData: DbData | null
@@ -67,11 +63,10 @@ export default function InsertionPanel({
   const [hoveredGroup, setHoveredGroup] = useState<string[] | null>(null)
   const [activeTab, setActiveTab] = useState<string>("insert")
   const [globalSpecs, setGlobalSpecs] = useState<TableSpecMap>({})
+  const [tableSpecs, setTableSpecs] = useState<TableSpecEntry | null>()
   const [tablePackets, setTablePackets] = useState<TablePacket | null>(null)
   const [pendingRefresh, setPendingRefresh] = useState(false)
   const [sqlScript, setSqlScript] = useState<string>("")
-
-
 
   useEffect(() => {
     getTimeOfDay()
@@ -91,6 +86,7 @@ export default function InsertionPanel({
 
   useEffect(() => {
     setActiveTab("insert")
+    saveTableSpecs()
     fetchActiveTableData()
 
     insertTabRef.current?.scrollTo({
@@ -131,34 +127,41 @@ export default function InsertionPanel({
       }
 
       setTableData(table)
-      setGlobalSpecs((prev) => {
-        if (prev[table.name]) return prev
-
-        const columnSpecMap = table.columns.reduce((acc, col) => {
-          acc[col.name] = {
-            name: col.name,
-            nullChance: 0,
-            generator: null,
-            type: "faker",
-          }
-          return acc
-        }, {} as ColumnSpecMap)
-
-        return {
-          ...prev,
-          [table.name]: {
-            name: table.name,
-            noOfEntries: 50,
-            columns: columnSpecMap,
-          },
-        }
-      })
-      return table
+      setTableSpecs(() => ({
+        name: table.name,
+        noOfEntries: globalSpecs[table.name]?.noOfEntries ?? 50,
+        columns:
+          globalSpecs[table.name]?.columns ??
+          Object.fromEntries(
+            table.columns.map((col) => [
+              col.name,
+              {
+                name: col.name,
+                nullChance: 0,
+                generator: null,
+                type: "faker",
+              },
+            ])
+          ),
+      }))
     } catch (err) {
       console.error("Error fetching table data:", err)
       setTableData(null)
       return null
     }
+  }
+
+  function saveTableSpecs() {
+    if (!tableSpecs) return
+
+    setGlobalSpecs((prev) => {
+      return {
+        ...prev,
+        [tableSpecs.name]: {
+          ...tableSpecs,
+        },
+      }
+    })
   }
 
   function runSql() {
@@ -215,8 +218,8 @@ export default function InsertionPanel({
 
     const tableSpec: TableSpec = {
       name: activeTable,
-      noOfEntries: globalSpecs[activeTable]?.noOfEntries,
-      columns: Object.values(globalSpecs[activeTable]?.columns) as ColumnSpec[],
+      noOfEntries: tableSpecs?.noOfEntries || 50,
+      columns: Object.values(tableSpecs?.columns!) as ColumnSpec[],
     }
     invokeVerifySpec(tableSpec)
       .then((res) => {
@@ -348,7 +351,7 @@ export default function InsertionPanel({
           </div>
         </div>
         <div className="flex h-full w-full flex-col overflow-hidden rounded rounded-tr-none border">
-          {tableData && tableData.columns && globalSpecs[tableData.name] ? (
+          {tableData && tableData.columns && tableSpecs ? (
             <div className="h-full w-full">
               <div
                 key={activeTable}
@@ -365,21 +368,16 @@ export default function InsertionPanel({
                         key={`${tableData.name}-${column.name}`}
                         column={column}
                         columnSpec={
-                          (globalSpecs[tableData.name]?.columns[
-                            column.name
-                          ] as ColumnSpec) ?? {}
+                          (tableSpecs?.columns[column.name] as ColumnSpec) ?? {}
                         }
                         setColumnSpec={(newSpec) =>
-                          setGlobalSpecs((prev) => {
-                            const table = tableData.name
+                          setTableSpecs((prev) => {
+                            if (!prev) return prev
                             return {
                               ...prev,
-                              [table]: {
-                                ...prev?.[table],
-                                columns: {
-                                  ...prev?.[table]?.columns,
-                                  [column.name]: newSpec,
-                                },
+                              columns: {
+                                ...prev?.columns,
+                                [column.name]: newSpec,
                               },
                             }
                           })
@@ -403,15 +401,13 @@ export default function InsertionPanel({
                   tableMetadata={tableData}
                   tablePackets={tablePackets}
                   doRefresh={verifyTableSpec}
-                  noOfRows={globalSpecs[tableData.name]?.noOfEntries}
+                  noOfRows={tableSpecs?.noOfEntries}
                   setNoOfRows={(rows) =>
-                    setGlobalSpecs((prev) => {
+                    setTableSpecs((prev) => {
+                      if (!prev) return prev
                       return {
                         ...prev,
-                        [tableData.name]: {
-                          ...prev?.[tableData.name],
-                          noOfEntries: rows,
-                        },
+                        noOfEntries: rows,
                       }
                     })
                   }

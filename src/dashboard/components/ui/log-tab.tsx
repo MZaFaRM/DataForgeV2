@@ -1,13 +1,9 @@
-import {
-    invokeClearLogs,
-    invokeGetLogs
-} from "@/api/db"
-import { Icon } from "@iconify/react"
 import { useEffect, useState } from "react"
+import { invokeClearLogs, invokeGetLogs } from "@/api/db"
+import { Icon } from "@iconify/react"
 
-import { toast } from "@/components/ui/use-toast"
 import { cn } from "@/lib/utils"
-
+import { toast } from "@/components/ui/use-toast"
 
 export default function RenderLogs({ activeTab }: { activeTab?: string }) {
   const [logs, setLogs] = useState<string[]>([])

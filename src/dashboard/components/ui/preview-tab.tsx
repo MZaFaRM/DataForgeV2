@@ -1,26 +1,11 @@
-import { useEffect, useRef, useState } from "react"
-import {
-  invokeClearLogs,
-  invokeGetLogs,
-  invokeRunSql,
-  invokeTableData,
-} from "@/api/db"
-import { invokeGetFakerMethods, invokeVerifySpec } from "@/api/fill"
-import DBColumn from "@/dashboard/components/ui/columns"
-import { sql } from "@codemirror/lang-sql"
 import { Icon } from "@iconify/react"
-import { githubDark, githubLight } from "@uiw/codemirror-theme-github"
-import CodeMirror, { EditorView } from "@uiw/react-codemirror"
-import { useTheme } from "next-themes"
+import { useEffect, useState } from "react"
 
-import { cn } from "@/lib/utils"
-import { Badge } from "@/components/ui/badge"
 import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu"
+  ErrorPacketMap,
+  TableMetadata,
+  TablePacket
+} from "@/components/types"
 import {
   Popover,
   PopoverContent,
@@ -34,20 +19,8 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table"
-import { Toaster } from "@/components/ui/toaster"
-import { TooltipProvider } from "@/components/ui/tooltip"
 import { toast } from "@/components/ui/use-toast"
-import {
-  ColumnSpec,
-  ColumnSpecMap,
-  DataPackage,
-  DbData,
-  ErrorPacketMap,
-  TableMetadata,
-  TablePacket,
-  TableSpec,
-  TableSpecMap,
-} from "@/components/types"
+import { cn } from "@/lib/utils"
 
 interface RenderPreviewProps {
   tableMetadata: TableMetadata

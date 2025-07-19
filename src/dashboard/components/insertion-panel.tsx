@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react"
 import { invokeRunSql, invokeTableData } from "@/api/db"
 import { invokeGetFakerMethods, invokeVerifySpec } from "@/api/fill"
-import DBColumn from "@/dashboard/components/ui/columns"
+import InsertTab from "@/dashboard/components/ui/insert-tab"
 import RenderLogs from "@/dashboard/components/ui/log-tab"
 import RenderPreview from "@/dashboard/components/ui/preview-tab"
 import { sql } from "@codemirror/lang-sql"
@@ -364,7 +364,7 @@ export default function InsertionPanel({
                 <Table>
                   <TableBody>
                     {tableData.columns.map((column) => (
-                      <DBColumn
+                      <InsertTab
                         key={`${tableData.name}-${column.name}`}
                         column={column}
                         columnSpec={

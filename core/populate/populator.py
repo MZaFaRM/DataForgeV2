@@ -3,9 +3,11 @@ import contextlib
 import math
 from dataclasses import dataclass
 from numbers import Number
+import re
 from typing import Any, Callable, cast
 
 from faker import Faker
+import rstr
 import faker
 
 from core.helpers import cap_numeric, cap_string
@@ -178,7 +180,8 @@ class Populator:
             raise VerificationError(f"Syntax Error in Python script: {e}")
 
     def make_regex(self, context: ColumnContext) -> list:
-        raise NotImplementedError("Regex generation is not implemented yet.")
+        regex_fn = lambda: rstr.xeger(context.col_spec.generator or "")
+        return self._sample_values(context.n, regex_fn, context.col_meta)
 
     def make_foreign(self, context: ColumnContext) -> list:
         raise NotImplementedError("Foreign key generation is not implemented yet.")
@@ -277,7 +280,8 @@ class Populator:
                 raise ValueError(f"Syntax Error: {e}")
 
         def check_regex(generator: str):
-            raise NotImplementedError()
+            # This will raise an error if the regex is invalid
+            re.compile(generator)
 
         def check_foreign(generator: str):
             raise NotImplementedError()

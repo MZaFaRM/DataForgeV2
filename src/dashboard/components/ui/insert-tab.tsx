@@ -17,6 +17,7 @@ import {
   CommandItem,
   CommandList,
 } from "@/components/ui/command"
+import { Input } from "@/components/ui/input"
 import {
   Popover,
   PopoverContent,
@@ -32,7 +33,7 @@ import {
 import { TableCell, TableRow } from "@/components/ui/table"
 import { ColumnData, ColumnSpec, GeneratorType } from "@/components/types"
 
-interface DBColumnProps {
+interface InsertTabProps {
   column: ColumnData
   columnSpec: ColumnSpec
   setColumnSpec: (newSpec: ColumnSpec) => void
@@ -41,16 +42,20 @@ interface DBColumnProps {
   setHoveredGroup: (group: string[] | null) => void
 }
 
-export default function DBColumn({
+export default function InsertTab({
   column,
   columnSpec,
   setColumnSpec,
   fakerMethods,
   hoveredGroup,
   setHoveredGroup,
-}: DBColumnProps) {
+}: InsertTabProps) {
   const thisGroup = column.multiUnique || column.unique ? [column.name] : []
   const inHovered = hoveredGroup?.includes(column.name)
+
+  useEffect(() => {
+    console.log("ColumnSpec changed:", columnSpec)
+  }, [columnSpec])
 
   const nullReason = column.primaryKey
     ? "is primary key"
@@ -326,6 +331,16 @@ function RenderGenerator({
   const [open, setOpen] = useState(false)
   const { theme } = useTheme()
 
+  useEffect(() => {
+    if (generatorTypeSelect === "foreign") {
+      setSelected(`${column.foreignKeys?.table}__${column.foreignKeys?.column}`)
+    } else if (generatorTypeSelect === "autoincrement") {
+      setSelected("autoincrement")
+    } else if (generatorTypeSelect === "computed") {
+      setSelected("computed")
+    }
+  }, [generatorTypeSelect])
+
   return generatorTypeSelect === "faker" ? (
     <Popover open={open} onOpenChange={setOpen}>
       <PopoverTrigger asChild>
@@ -333,13 +348,21 @@ function RenderGenerator({
           variant="outline"
           role="combobox"
           aria-expanded={open}
-          className={cn("w-[200px] justify-between")}
+          className={cn("w-[350px] justify-between")}
         >
-          {selected ?? "Select item"}
+          <div
+            className={cn(
+              "flex items-center",
+              selected ? "text-white" : "text-muted-foreground"
+            )}
+          >
+            <Icon icon="mdi:collection" className="mr-2 h-4 w-4" />
+            {selected ?? "Select item"}
+          </div>
           <CaretSortIcon className="ml-auto h-4 w-4 shrink-0 opacity-50" />
         </Button>
       </PopoverTrigger>
-      <PopoverContent className="w-[200px] p-0">
+      <PopoverContent className="w-[350px] p-0">
         <Command>
           <CommandInput placeholder="Search..." />
           <CommandEmpty>No item found.</CommandEmpty>
@@ -376,34 +399,35 @@ function RenderGenerator({
             variant="outline"
             role="combobox"
             aria-expanded={false}
-            className="w-[200px] justify-between"
+            className="w-[350px] justify-start text-left"
             disabled
           >
-            {column.foreignKeys.table}.{column.foreignKeys.column}
-            <CaretSortIcon className="ml-auto h-4 w-4 shrink-0 opacity-50" />
+            <Icon icon="tabler:table-filled" className="mr-2 h-4 w-4" />
+            {column.foreignKeys.table}__{column.foreignKeys.column}
           </Button>
         </span>
       </PopoverTrigger>
     </Popover>
   ) : generatorTypeSelect === "regex" ? (
-    <div className="overflow-auto rounded border">
-      <CodeMirror
-        placeholder={"Regex (Python engine)"}
-        value={selected ?? ""}
-        extensions={[EditorView.lineWrapping]}
-        theme={theme === "light" ? githubLight : githubDark}
-        height="auto"
-        minHeight="35px"
-        maxHeight="200px"
-        className="w-150 cm-content"
-        basicSetup={{
-          lineNumbers: false,
-          foldGutter: false,
-        }}
-      />
+    <div className="w-[350px] overflow-auto rounded border">
+      <div className="flex items-stretch bg-muted">
+        <div className="flex w-10">
+          <Icon icon="mingcute:up-fill" className="m-auto h-4 w-4" />
+        </div>
+        <Input
+          placeholder={"Regex (Python engine)"}
+          value={selected ? selected.slice(1, -1) : ""}
+          onChange={(e) => setSelected("^" + e.target.value + "$")}
+          height="auto"
+          className="rounded-none border-0 text-green-400"
+        />
+        <div className="flex w-10">
+          <Icon icon="bx:dollar" className="m-auto h-4 w-4" />
+        </div>
+      </div>
     </div>
   ) : generatorTypeSelect === "python" ? (
-    <div className="overflow-auto rounded border">
+    <div className="w-[350px] overflow-auto rounded border">
       <CodeMirror
         placeholder={
           "# import builtins + faker\n" +
@@ -434,23 +458,6 @@ function RenderGenerator({
           lineNumbers: false,
           foldGutter: false,
         }}
-      />
-    </div>
-  ) : generatorTypeSelect === "sql" ? (
-    <div className="overflow-auto rounded border">
-      <CodeMirror
-        value={selected ?? ""}
-        placeholder={"-- SQL expression"}
-        extensions={[sql(), EditorView.lineWrapping]}
-        theme={theme === "light" ? githubLight : githubDark}
-        height="auto"
-        minHeight="35px"
-        maxHeight="200px"
-        basicSetup={{
-          lineNumbers: false,
-          foldGutter: false,
-        }}
-        style={{ whiteSpace: "pre" }}
       />
     </div>
   ) : null

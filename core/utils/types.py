@@ -10,9 +10,11 @@ class ForeignKeyRef(BaseModel):
 class ColumnMetadata(BaseModel):
     name: str
     type: str
+    unique: bool
+    multi_unique: Optional[tuple[str, ...]] = None
     primary_key: bool
     nullable: bool
-    default: Optional[str]
+    default: Optional[str] = None
     autoincrement: bool
     computed: bool
     foreign_keys: ForeignKeyRef
@@ -23,8 +25,6 @@ class ColumnMetadata(BaseModel):
 
 class TableMetadata(BaseModel):
     name: str
-    s_uniques: list[str]
-    m_uniques: list[tuple[str, ...]]
     parents: list[str]
     columns: list[ColumnMetadata]
 

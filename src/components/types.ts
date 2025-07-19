@@ -22,6 +22,8 @@ export interface DbData {
 export interface ColumnData {
   name: string
   type: string
+  unique: boolean
+  multiUnique: string[] | null
   primaryKey: boolean
   nullable: boolean
   default: string | null
@@ -29,12 +31,12 @@ export interface ColumnData {
   computed: boolean
   foreignKeys: { table: string; column: string }
   length: number | null
+  precision: number | null
+  scale: number | null
 }
 
 export interface TableMetadata {
   name: string
-  sUniques: string[]
-  mUniques: string[][]
   parents: string[]
   columns: ColumnData[]
 }
@@ -54,13 +56,19 @@ export interface DataPackage {
   inserted: boolean
 }
 
-export type BaseSelectType = "faker" | "regex" | "foreign" | "auto" | "python"
+export type GeneratorType =
+  | "faker"
+  | "regex"
+  | "foreign"
+  | "autoincrement"
+  | "computed"
+  | "python"
 
 export interface ColumnSpec {
   name: string
   nullChance: number
   generator: string | null
-  type: BaseSelectType
+  type: GeneratorType
 }
 export interface TableSpec {
   name: string

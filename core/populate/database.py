@@ -229,6 +229,7 @@ class DatabaseManager:
         fk_map = self.get_foreign_keys(table_name)
         pk = self.inspector.get_pk_constraint(table_name).get("constrained_columns", [])
         cols = self.inspector.get_columns(table_name)
+        s, m = self.get_unique_columns(table_name)
 
         def handle_default(default_val):
             if default_val is None:
@@ -241,12 +242,15 @@ class DatabaseManager:
         for col in cols:
             name = col["name"]
             dtype = col["type"]
+            multi_unique = next((i for i, t in enumerate(m) if name in t), None)
 
             column_metadata = ColumnMetadata(
                 name=name,
                 type=str(dtype),
                 primary_key=name in pk,
                 nullable=col.get("nullable", True),
+                unique=s is not None and name in s,
+                multi_unique=m[multi_unique] if multi_unique is not None else None,
                 default=handle_default(col.get("default")),
                 autoincrement=bool(col.get("autoincrement")),
                 computed=bool(col.get("computed")),
@@ -257,11 +261,8 @@ class DatabaseManager:
             )
             columns.append(column_metadata)
 
-        s, m = self.get_unique_columns(table_name)
         return TableMetadata(
             name=table_name,
-            s_uniques=s,
-            m_uniques=m,
             parents=list(set(t.table for t in fk_map.values())),
             columns=columns,
         )

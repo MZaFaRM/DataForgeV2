@@ -334,21 +334,28 @@ class Populator:
         rows: list,
         cache: dict[str, Any] | None = None,
     ) -> list:
-        def satisfy_s_unique(rows: list) -> list:
+        filtered_rows = rows
+
+        def satisfy_unique(rows: list) -> list:
             seen = set()
             unique_row = [row for row in rows if not (row in seen or seen.add(row))]
-            if c_spec.name in table_meta.s_uniques:
-                cache_key = f"forbidden.{table_meta.name}.{c_spec.name}"
-                if cache is not None:
-                    if cache_key in cache:
-                        forbidden = cache[cache_key]
-                    else:
-                        forbidden = cache[cache_key] = set(
-                            dbm.get_existing_values(table_meta.name, c_spec.name)
-                        )
-                    return [row for row in unique_row if row not in forbidden]
+            cache_key = f"forbidden.{table_meta.name}.{c_spec.name}"
+            if cache is not None:
+                if cache_key in cache:
+                    forbidden = cache[cache_key]
+                else:
+                    forbidden = cache[cache_key] = set(
+                        dbm.get_existing_values(table_meta.name, c_spec.name)
+                    )
+                return [row for row in unique_row if row not in forbidden]
+
             return unique_row
 
-        return satisfy_s_unique(rows)
+        col_md = table_meta.get_column(c_spec.name)
+        assert col_md, f"Column {c_spec.name} not found in table {table_meta.name}"
+        if col_md.unique:
+            filtered_rows = satisfy_unique(filtered_rows)
+
+        return filtered_rows
 
     # endregion

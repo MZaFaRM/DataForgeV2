@@ -43,7 +43,7 @@ class ColumnSpec(BaseModel):
     name: str
     null_chance: float
     generator: Optional[str] = None
-    type: Literal["faker", "regex", "foreign", "python", "auto"]
+    type: Literal["faker", "regex", "foreign", "python", "autoincrement", "computed"]
 
 
 class TableSpec(BaseModel):
@@ -71,5 +71,6 @@ class DbCredsSchema(BaseModel):
     port: str
     user: str
     password: str
+    connected: bool = False
 
     model_config = {"from_attributes": True}

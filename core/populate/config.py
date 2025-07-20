@@ -17,36 +17,44 @@ class ConfigHandler:
 
     def save_cred(self, cred: DbCredsSchema):
         with self.Session() as session:
-            db_cred = DbCreds(**cred.model_dump())
+            db_cred = DbCreds(**cred.model_dump(exclude={"connected"}))
             session.merge(db_cred)
             session.commit()
 
-    def load_cred(self, name: str, host: str, port: str) -> Optional[DbCredsSchema]:
+    def load_cred(
+        self, name: str, host: str, port: str, user: str
+    ) -> Optional[DbCredsSchema]:
         with self.Session() as session:
             row = (
                 session.query(DbCreds)
-                .filter_by(name=name, host=host, port=port)
+                .filter_by(name=name, host=host, port=port, user=user)
                 .first()
             )
             return DbCredsSchema.model_validate(row) if row else None
 
-    def list_creds(self) -> list[tuple[str, str, str]]:
+    def list_creds(self) -> list[dict[str, str]]:
         with self.Session() as session:
-            return (
+            rows = (
                 session.query(
                     DbCreds.name,
                     DbCreds.host,
                     DbCreds.port,
+                    DbCreds.user,
                 )
                 .tuples()
                 .all()
             )
 
-    def delete_cred(self, name: str, host: str, port: str):
+            return [
+                {"name": name, "host": host, "port": port, "user": user}
+                for name, host, port, user in rows
+            ]
+
+    def delete_cred(self, name: str, host: str, port: str, user: str):
         with self.Session() as session:
             row = (
                 session.query(DbCreds)
-                .filter_by(name=name, host=host, port=port)
+                .filter_by(name=name, host=host, port=port, user=user)
                 .first()
             )
             if row:

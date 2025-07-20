@@ -7,6 +7,7 @@ export function invokeGetFakerMethods() {
 }
 
 export function invokeVerifySpec(tableSpec: TableSpec) {
+  console.log("Verify", tableSpec);
   return invokeAndExtract<TableSpec, TablePacket>({
     kind: "verify_spec",
     body: tableSpec,

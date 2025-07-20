@@ -73,9 +73,6 @@ class Runner:
         required = ["host", "user", "port", "name", "password"]
         missing = [k for k in required if not creds.get(k)]
 
-        for k in required:
-            setattr(self.dbm, k, str(creds.get(k, "")))
-
         if missing:
             msg = (
                 f"Missing required connection parameter: {missing[0]}"
@@ -84,43 +81,45 @@ class Runner:
             )
             return self._err(msg)
 
-        self.dbm.create_url()
-        self.dbm.create_engine()
-        self.dbm.test_connection()
-        self.configs.save_cred(self.dbm.to_schema())
+        self.dbm.from_dict(creds)
+        self.dbm.connect()
+        schema = self.dbm.to_schema()
+        self.configs.save_cred(schema)
         return self._ok(self.dbm.to_dict())
 
     def _handle_reconnect(self, body: dict):
         if not body:
             return self._err("DB details needed.")
-        name, host, port = (body.get(cred, None) for cred in ("name", "host", "port"))
-        if name is None or host is None or port is None:
+        name, host, port, user = (
+            body.get(cred, None) for cred in ("name", "host", "port", "user")
+        )
+        if name is None or host is None or port is None or user is None:
             return self._err("Requires name, host and port to reconnect")
 
-        creds_schema = self.configs.load_cred(name=name, host=host, port=port)
+        creds_schema = self.configs.load_cred(
+            name=name, host=host, port=port, user=user
+        )
         if not creds_schema:
             return self._err("No DB with that credentials found.")
 
-        self.dbm = DatabaseManager()
         self.dbm.from_schema(creds_schema)
-        self.dbm.create_url()
-        self.dbm.create_engine()
-        self.dbm.test_connection()
+        self.dbm.connect()
         return self._ok("Reconnected successfully.")
 
     def _handle_list_connections(self, _=None) -> dict:
         creds = self.configs.list_creds()
-        serializable = [list(row) for row in creds]
-        return self._ok(serializable)
+        return self._ok(creds)
 
     def _handle_delete_connection(self, body: dict) -> dict:
         if not body:
             return self._err("DB details needed.")
-        name, host, port = (body.get(cred, None) for cred in ("name", "host", "port"))
-        if name is None or host is None or port is None:
+        name, host, port, user = (
+            body.get(cred, None) for cred in ("name", "host", "port", "user")
+        )
+        if name is None or host is None or port is None or user is None:
             return self._err("Requires name, host and port to delete connection")
 
-        self.configs.delete_cred(name=name, host=host, port=port)
+        self.configs.delete_cred(name=name, host=host, port=port, user=user)
         return self._ok("Connection deleted successfully.")
 
     def _handle_disconnect(self, _=None) -> dict:

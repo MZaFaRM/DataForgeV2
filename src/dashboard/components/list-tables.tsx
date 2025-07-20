@@ -67,14 +67,12 @@ interface ListTablesProps {
   dbData: DbData | null
   activeTable: string | null
   setActiveTable: (activeTable: string | null) => void
-  connected?: boolean
 }
 
 export default function ListTables({
   dbData,
   activeTable,
   setActiveTable,
-  connected,
 }: ListTablesProps) {
   const [tableEntries, setTableEntries] = useState<TableEntry[] | null>(null)
   const [availableHeight, setAvailableHeight] = useState("")
@@ -102,17 +100,20 @@ export default function ListTables({
     if (!dbData) {
       setTableEntries(null)
       setActiveTable(null)
+    } else {
+      fetchTables()
     }
   }, [dbData])
 
   function fetchTables() {
-    if (!dbData || !dbData.connected) {
+    if (!dbData) {
       setTableEntries(null)
       return
     }
 
     invokeGetTables()
       .then((res) => {
+        console.log("Fetched tables:", res)
         setTableEntries(res)
       })
       .catch((error) => {
@@ -130,12 +131,8 @@ export default function ListTables({
   }, [activeTable])
 
   useEffect(() => {
-    setActiveTable(tableEntries?.[0]["name"] || null)
+    setActiveTable(tableEntries?.[0]?.["name"] || null)
   }, [tableEntries])
-
-  useEffect(() => {
-    fetchTables()
-  }, [dbData])
 
   const filteredEntries = useMemo(() => {
     if (scrollContainerRef.current) {

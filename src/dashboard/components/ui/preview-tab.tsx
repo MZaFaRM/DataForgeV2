@@ -136,8 +136,8 @@ export default function RenderPreview({
                         key={`${name}.${colIndex}.${rowIndex}`}
                         className={cn(
                           "w-[50px] whitespace-nowrap text-center",
-                          warnCols[columnName] && "border-x-2 border-yellow-600",
-                          errorCols[columnName] && "border-x-2 border-red-600"
+                          warnCols[columnName] && "bg-yellow-100/25",
+                          errorCols[columnName] && "bg-red-100/25"
                         )}
                       >
                         <div className="max-w-full">

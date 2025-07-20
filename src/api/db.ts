@@ -1,4 +1,4 @@
-import { DbData, TableEntry, TableMetadata } from "@/components/types"
+import { DBCreds, DbData, TableEntry, TableMetadata } from "@/components/types"
 
 import { invokeAndExtract } from "./cli"
 
@@ -12,6 +12,24 @@ export function invokeDbConnection(dbCreds: DbData) {
 
 export function invokeDbDisconnect() {
   return invokeAndExtract<void, string>({ kind: "disconnect" })
+}
+
+export function invokeListDbCreds() {
+  return invokeAndExtract<void, DBCreds[]>({ kind: "list_connections" })
+}
+
+export function invokeDbDeletion(dbCreds: DBCreds) {
+  return invokeAndExtract<DBCreds, string>({
+    kind: "delete_connection",
+    body: dbCreds,
+  })
+}
+
+export function invokeDbReconnection(dbCreds: DBCreds) {
+  return invokeAndExtract<DBCreds, DbData>({
+    kind: "reconnect",
+    body: dbCreds,
+  })
 }
 
 export function invokeGetTables() {

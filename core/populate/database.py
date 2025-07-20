@@ -36,7 +36,14 @@ class DatabaseManager:
             "user": self.user,
             "port": self.port,
             "name": self.name,
+            "connected": self.connected,
         }
+
+    def from_dict(self, data: dict):
+        for key in ["host", "user", "port", "name", "password"]:
+            if key not in data:
+                raise ValueError(f"Missing required key: {key}")
+            setattr(self, key, str(data[key]))
 
     def to_schema(self) -> DbCredsSchema:
         return DbCredsSchema(
@@ -45,41 +52,14 @@ class DatabaseManager:
             port=self.port,
             user=self.user,
             password=self.password,
+            connected=self.connected,
         )
 
     def from_schema(self, schema: DbCredsSchema) -> None:
-        for attr in ["host", "user", "port", "name", "password"]:
-            setattr(self, attr, getattr(schema, attr, None))
-
-    def setup_logging(self, log_path: str = "sqlalchemy.log"):
-        logger = logging.getLogger("sqlalchemy.engine")
-        logger.setLevel(logging.INFO)
-        logger.propagate = False  # Prevent console spam
-
-        file_handler = logging.FileHandler(f"{self.name}.{log_path}", mode="w")
-        file_handler.setLevel(logging.INFO)
-        formatter = logging.Formatter("%(asctime)s [%(levelname)s] %(message)s")
-        file_handler.setFormatter(formatter)
-
-        logger.addHandler(file_handler)
-
-    def read_logs(
-        self, log_path: str = "sqlalchemy.log", lines: int = 100
-    ) -> list[str]:
-        log_file = f"{self.name}.{log_path}"
-        if not os.path.exists(log_file):
-            return []
-
-        with open(log_file, "r") as f:
-            logs = f.readlines()[-lines:]
-
-        return [log.strip() for log in logs]
-
-    def clear_logs(self, log_path: str = "sqlalchemy.log"):
-        log_file = f"{self.name}.{log_path}"
-        if os.path.exists(log_file):
-            with open(log_file, "w") as f:
-                f.write("")
+        for key in ["host", "user", "port", "name", "password"]:
+            if not hasattr(schema, key):
+                raise ValueError(f"Missing required key: {key}")
+            setattr(self, key, str(getattr(schema, key, None)))
 
     @property
     def url(self) -> str:
@@ -104,6 +84,45 @@ class DatabaseManager:
     @property
     def connected(self) -> bool:
         return getattr(self, "_connected", False)
+
+    def setup_logging(self, log_path: str = "sqlalchemy.log"):
+        logger = logging.getLogger("sqlalchemy")
+        logger.setLevel(logging.INFO)
+        logger.propagate = False
+
+        logger.handlers.clear()
+
+        file_handler = logging.FileHandler(f"{self.name}.{log_path}", mode="w")
+        file_handler.setLevel(logging.INFO)
+        formatter = logging.Formatter("%(asctime)s [%(levelname)s] %(message)s")
+        file_handler.setFormatter(formatter)
+
+        logger.addHandler(file_handler)
+
+        for sub in ["sqlalchemy.engine", "sqlalchemy.pool", "sqlalchemy.dialects"]:
+            sub_logger = logging.getLogger(sub)
+            sub_logger.setLevel(logging.INFO)
+            sub_logger.propagate = False
+            sub_logger.handlers.clear()
+            sub_logger.addHandler(file_handler)
+
+    def read_logs(
+        self, log_path: str = "sqlalchemy.log", lines: int = 100
+    ) -> list[str]:
+        log_file = f"{self.name}.{log_path}"
+        if not os.path.exists(log_file):
+            return []
+
+        with open(log_file, "r") as f:
+            logs = f.readlines()[-lines:]
+
+        return [log.strip() for log in logs]
+
+    def clear_logs(self, log_path: str = "sqlalchemy.log"):
+        log_file = f"{self.name}.{log_path}"
+        if os.path.exists(log_file):
+            with open(log_file, "w") as f:
+                f.write("")
 
     def create_url(self, engine: str = "mysql") -> str:
         if engine == "mysql":
@@ -144,6 +163,14 @@ class DatabaseManager:
             if not fail_silently:
                 raise FileNotFoundError(f"Credentials file '{path}' not found.")
 
+    @requires("host", "user", "port", "name", "password")
+    def connect(self) -> bool:
+        self.create_url()
+        self.create_engine()
+        self.test_connection()
+        self._connected = True
+        return True
+
     @requires("url")
     def create_engine(self) -> Engine:
         self.setup_logging()
@@ -154,8 +181,7 @@ class DatabaseManager:
     def test_connection(self) -> bool:
         with self._engine.connect() as connection:
             connection.execute(sql_text("SELECT 1"))
-            self._connected = True
-        return self._connected
+        return True
 
     @requires("engine")
     def get_columns(self, table_name: str) -> list:
@@ -337,19 +363,20 @@ class DatabaseManager:
         return values
 
     @requires("engine")
-    def run_sql(self, sql: str) -> bool:
+    def run_sql(self, sql: str) -> list[dict] | int:
         try:
             with self.engine.begin() as conn:
                 result = conn.execute(sql_text(sql))
                 logging.info(f"Executed SQL: {sql}")
 
                 if result.returns_rows:
-                    for row in result:
-                        logging.info(row._mapping)
+                    rows = [dict(row._mapping) for row in result]
+                    logging.info(f"Returned {len(rows)} rows.")
+                    return rows
                 else:
                     logging.info(f"Rows affected: {result.rowcount}")
+                    return result.rowcount  # or just True if you prefer
 
-            return True
         except Exception as e:
             logging.error(f"Error executing SQL: {e}")
             raise e

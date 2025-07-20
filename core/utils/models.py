@@ -1,6 +1,6 @@
 import base64
 import os
-from sqlalchemy import Column, PrimaryKeyConstraint, String
+from sqlalchemy import Boolean, Column, PrimaryKeyConstraint, String
 from sqlalchemy.orm import declarative_base
 
 Base = declarative_base()

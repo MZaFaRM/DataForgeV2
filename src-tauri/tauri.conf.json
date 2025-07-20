@@ -7,7 +7,7 @@
     "frontendDist": "../build",
     "devUrl": "http://localhost:5173",
     "beforeDevCommand": "pnpm dev",
-    "beforeBuildCommand": "pyinstaller --onefile -n populator-x86_64-unknown-linux-gnu cli.py --distpath sidecar --hidden-import=cryptography && pnpm build"
+    "beforeBuildCommand": "pnpm build"
   },
   "app": {
     "windows": [

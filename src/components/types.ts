@@ -9,6 +9,13 @@ export type CliRequest<T> = Record<string, unknown> & {
   body?: T
 }
 
+export interface DBCreds {
+  name: string
+  host: string
+  port: string
+  user: string
+}
+
 export interface DbData {
   host: string
   user: string
@@ -64,16 +71,16 @@ export type GeneratorType =
   | "computed"
   | "python"
 
+export interface TableSpec {
+  name: string
+  noOfEntries: number
+  columns: ColumnSpec[]
+}
 export interface ColumnSpec {
   name: string
   nullChance: number
   generator: string | null
   type: GeneratorType
-}
-export interface TableSpec {
-  name: string
-  noOfEntries: number
-  columns: ColumnSpec[]
 }
 
 export type ColumnSpecMap = Record<string, ColumnSpec>

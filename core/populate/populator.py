@@ -3,6 +3,7 @@ import contextlib
 import math
 from dataclasses import dataclass
 from numbers import Number
+import random
 import re
 from typing import Any, Callable, cast
 
@@ -210,7 +211,18 @@ class Populator:
 
         rows = cache[f"{fk.table}.{fk.column}"]
 
-        return rows
+        return [random.choice(rows) for _ in range(context.n)]
+
+    def make_autoincrement(self, context: Context) -> list:
+        existing = context.dbm.get_existing_values(
+            context.table.name, context.column.name
+        )
+        max_val = max((v for v in existing if isinstance(v, int)), default=0)
+
+        return [f"{max_val + i + 1} [auto]" for i in range(context.n)]
+
+    def make_computed(self, context: Context) -> list:
+        return ["_expr_" for _ in range(context.n)]
 
     # endregion
 

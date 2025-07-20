@@ -8,13 +8,13 @@ from core.populate.config import ConfigHandler
 from core.utils.types import DbCredsSchema, TableSpec
 
 from core.populate.populator import Populator
-from core.populate.database import DatabaseManager
+from core.populate.factory import DatabaseFactory
 from core.utils.response import Request, Response
 
 
 class Runner:
     def __init__(self):
-        self.dbm = DatabaseManager()
+        self.dbf = DatabaseFactory()
         self.populator = Populator()
         self.configs = ConfigHandler()
 
@@ -64,7 +64,7 @@ class Runner:
         return self._ok("pong")
 
     def _handle_info(self, _=None) -> dict:
-        return self._ok(self.dbm.to_dict())
+        return self._ok(self.dbf.to_dict())
 
     def _handle_faker_methods(self, _=None) -> dict:
         return self._ok(self.populator.methods)
@@ -81,11 +81,11 @@ class Runner:
             )
             return self._err(msg)
 
-        self.dbm.from_dict(creds)
-        self.dbm.connect()
-        schema = self.dbm.to_schema()
+        self.dbf.from_dict(creds)
+        self.dbf.connect()
+        schema = self.dbf.to_schema()
         self.configs.save_cred(schema)
-        return self._ok(self.dbm.to_dict())
+        return self._ok(self.dbf.to_dict())
 
     def _handle_reconnect(self, body: dict):
         if not body:
@@ -102,8 +102,8 @@ class Runner:
         if not creds_schema:
             return self._err("No DB with that credentials found.")
 
-        self.dbm.from_schema(creds_schema)
-        self.dbm.connect()
+        self.dbf.from_schema(creds_schema)
+        self.dbf.connect()
         return self._ok("Reconnected successfully.")
 
     def _handle_list_connections(self, _=None) -> dict:
@@ -123,17 +123,17 @@ class Runner:
         return self._ok("Connection deleted successfully.")
 
     def _handle_disconnect(self, _=None) -> dict:
-        self.dbm = DatabaseManager()
+        self.dbf = DatabaseFactory()
         return self._ok("Disconnected successfully.")
 
     def _handle_tables(self, _=None) -> dict:
         table_info = {"table_data": {}, "sorted_tables": []}
 
         t1 = threading.Thread(
-            target=lambda: table_info.update(table_data=self.dbm.get_tables())
+            target=lambda: table_info.update(table_data=self.dbf.get_tables())
         )
         t2 = threading.Thread(
-            target=lambda: table_info.update(sorted_tables=self.dbm.sort_tables())
+            target=lambda: table_info.update(sorted_tables=self.dbf.sort_tables())
         )
 
         t1.start()
@@ -156,35 +156,35 @@ class Runner:
         if "name" not in body:
             return self._err("Table name is required.")
 
-        metadata = self.dbm.get_table_metadata(body["name"])
+        metadata = self.dbf.get_table_metadata(body["name"])
         if not metadata:
             return self._err(f"No metadata found for table '{body['name']}'.")
 
         return self._ok(metadata.model_dump())
 
     def _handle_verify_spec(self, body: dict) -> dict:
-        result = self.populator.resolve_specifications(self.dbm, TableSpec(**body))
+        result = self.populator.resolve_specifications(self.dbf, TableSpec(**body))
         return self._ok(result.model_dump())
 
     def _handle_run_sql(self, body: dict) -> dict:
         if body is None or "sql" not in body:
             return self._err("SQL query is required.")
         try:
-            self.dbm.run_sql(body["sql"])
+            self.dbf.run_sql(body["sql"])
             return self._ok("Query executed successfully.")
         except Exception as e:
             return self._err(f"SQL execution failed: {str(e)}")
 
     def _handle_get_logs(self, body: dict) -> dict:
         try:
-            logs = self.dbm.read_logs(lines=(body.get("lines", 200) if body else 200))
+            logs = self.dbf.read_logs(lines=(body.get("lines", 200) if body else 200))
             return self._ok(logs)
         except Exception as e:
             return self._err(f"Failed to retrieve logs: {str(e)}")
 
     def _handle_clear_logs(self, body: dict) -> dict:
         try:
-            self.dbm.clear_logs()
+            self.dbf.clear_logs()
             return self._ok("Logs cleared successfully.")
         except Exception as e:
             return self._err(f"Failed to clear logs: {str(e)}")

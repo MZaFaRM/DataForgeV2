@@ -1,21 +1,39 @@
+import ast
+from dataclasses import dataclass
 import json
 import logging
+import math
+from numbers import Number
 import os
 from collections.abc import Sequence
+import random
+import re
+from typing import Any, Callable
 
+from faker import Faker
+import faker
 import networkx as nx
 from networkx import Graph
+import rstr
 from sqlalchemy import create_engine, inspect
 from sqlalchemy import text as sql_text
 from sqlalchemy.engine import Engine, Inspector
 from sqlalchemy.engine.reflection import Inspector
 
+from core.helpers import cap_string, cap_numeric
 from core.utils.decorators import requires
-from core.utils.exceptions import MissingRequiredAttributeError
-from core.utils.types import ColumnMetadata, DbCredsSchema, ForeignKeyRef, TableMetadata
+from core.utils.exceptions import MissingRequiredAttributeError, VerificationError
+from core.utils.types import GeneratorType as GType
+from core.utils.types import (
+    ColumnMetadata,
+    ColumnSpec,
+    DbCredsSchema,
+    ForeignKeyRef,
+    TableMetadata,
+)
 
 
-class DatabaseManager:
+class DatabaseFactory:
     def __init__(
         self,
         host: str = "",
@@ -380,3 +398,177 @@ class DatabaseManager:
         except Exception as e:
             logging.error(f"Error executing SQL: {e}")
             raise e
+
+
+@dataclass
+class ContextFactory:
+    dbf: DatabaseFactory
+    table: TableMetadata
+    col_spec: ColumnSpec
+    n: int
+    entries: dict[str, list[str]] | None = None
+
+    @property
+    def column(self) -> ColumnMetadata:
+        if self.table is None or self.col_spec is None:
+            raise ValueError("Table or column specification is missing.")
+        return self.table.get_column(self.col_spec.name)
+
+    @property
+    def cache(self) -> dict[str, Any]:
+        if not hasattr(self, "_cache"):
+            self._cache = {}
+        return self._cache
+
+
+class GeneratorFactory:
+    def __init__(self) -> None:
+        self.faker = Faker()
+
+    def make(self, type: GType, context: ContextFactory) -> list[str]:
+        make_fn = getattr(self, f"make_{type.value}", None)
+        if make_fn is None or not callable(make_fn):
+            raise ValueError(f"Unknown generator type: {type}")
+        return make_fn(context)  # type: ignore
+
+    def make_faker(self, context: ContextFactory) -> list[str]:
+        assert context.col_spec.generator, "Faker generator is not specified."
+        faker_fn = getattr(self.faker, context.col_spec.generator)
+        return self._sample_values(context.n, faker_fn, context.column)
+
+    def make_python(self, context: ContextFactory) -> list[str]:
+        if not context.col_spec.generator:
+            return []
+
+        assert context.entries
+        try:
+            tree = ast.parse(context.col_spec.generator)
+
+            # Prepare the environment for execution
+            env = {
+                "faker": faker,
+                "columns": {},
+                "order": lambda x: (lambda f: f),
+                "__builtins__": __builtins__,
+            }
+            exec(compile(tree, filename="<ast>", mode="exec"), env)
+
+            # Call the generator function
+            gen = env["generator"]
+            col = context.column
+
+            rows = []
+            for idx in range(context.n):
+                columns = {key: context.entries[key][idx] for key in context.entries}
+                val = gen(columns=columns)
+
+                if isinstance(val, str):
+                    val = cap_string(val, col.length)
+                elif isinstance(val, Number):
+                    val = cap_numeric(val, col.precision, col.scale)  # type: ignore
+
+                rows.append(str(val))
+            return rows
+
+        except SyntaxError as e:
+            raise VerificationError(f"Syntax Error in Python script: {e}")
+
+    def make_regex(self, context: ContextFactory) -> list[str]:
+        regex_fn = lambda: rstr.xeger(context.col_spec.generator or "")
+        return self._sample_values(context.n, regex_fn, context.column)
+
+    def make_foreign(self, context: ContextFactory) -> list[str]:
+        column = context.column
+        fk = column.foreign_keys
+        cache = context.cache
+        dbf = context.dbf
+
+        if not fk:
+            raise ValueError(f"No foreign key reference for column {column.name}")
+
+        if not f"{fk.table}.{fk.column}" in cache:
+            cache[f"{fk.table}.{fk.column}"] = dbf.get_existing_values(
+                fk.table, fk.column
+            )
+
+        rows = cache[f"{fk.table}.{fk.column}"]
+
+        return [random.choice(rows) for _ in range(context.n)]
+
+    def make_autoincrement(self, context: ContextFactory) -> list[str]:
+        existing = context.dbf.get_existing_values(
+            context.table.name, context.column.name
+        )
+        max_val = max((v for v in existing if isinstance(v, int)), default=0)
+
+        return [f"{max_val + i + 1} [auto]" for i in range(context.n)]
+
+    def make_computed(self, context: ContextFactory) -> list[str]:
+        return ["[expr]" for _ in range(context.n)]
+
+    def _sample_values(self, n: int, gen_fn: Callable, col: ColumnMetadata) -> list[str]:
+        overshoot = math.ceil(n * 1.5)
+        rows = []
+        for _ in range(overshoot):
+            val = gen_fn()
+
+            if isinstance(val, str):
+                val = cap_string(val, col.length)
+            elif isinstance(val, Number):
+                val = cap_numeric(val, col.precision, col.scale)  # type: ignore
+
+            rows.append(str(val))
+
+        return list(rows)
+
+    def check(self, type: GType, generator: str) -> bool | int:
+        make_fn = getattr(self, f"check_{type.value}", None)
+        if make_fn is None or not callable(make_fn):
+            raise ValueError(f"Unknown check type: {type}")
+        return make_fn(generator)  # type: ignore
+
+    def check_faker(self, generator: str):
+        if not callable(getattr(self.faker, generator, None)):
+            raise VerificationError(
+                f"Faker method '{generator}' is not callable or doesn't exist."
+            )
+        return True
+
+    def check_python(self, generator: str) -> int:
+        try:
+            tree = ast.parse(generator)
+
+            for node in tree.body:
+                if isinstance(node, ast.FunctionDef) and node.name == "generator":
+                    if len(node.args.args) != 1 or (node.args.args[0].arg != "columns"):
+                        raise ValueError(
+                            "generator() must take exactly 1 arg: 'columns'."
+                        )
+                    for deco in node.decorator_list:
+                        if (
+                            isinstance(deco, ast.Call)
+                            and getattr(deco.func, "id", "") == "order"
+                        ):
+                            if isinstance(deco.args[0], ast.Constant) and isinstance(
+                                deco.args[0].value, int
+                            ):
+                                return deco.args[0].value
+                            raise ValueError("@order requires int type arg")
+                    raise ValueError("Missing @order(int) decorator")
+            raise ValueError("No valid generator() function found")
+        except SyntaxError as e:
+            raise ValueError(f"Syntax Error: {e}")
+
+    def check_regex(self, generator: str):
+        # This will raise an error if the regex is invalid
+        re.compile(generator)
+        return True
+
+    def check_foreign(self, generator: str):
+        return True
+
+    def check_autoincrement(self, generator: str):
+        return True
+
+    def check_computed(self, generator: str):
+        return True

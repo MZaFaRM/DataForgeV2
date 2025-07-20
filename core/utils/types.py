@@ -1,5 +1,15 @@
+import enum
 from typing import Literal, Optional
 from pydantic import BaseModel
+
+
+class GeneratorType(str, enum.Enum):
+    faker = "faker"
+    regex = "regex"
+    foreign = "foreign"
+    python = "python"
+    autoincrement = "autoincrement"
+    computed = "computed"
 
 
 class ForeignKeyRef(BaseModel):
@@ -43,7 +53,7 @@ class ColumnSpec(BaseModel):
     name: str
     null_chance: float
     generator: Optional[str] = None
-    type: Literal["faker", "regex", "foreign", "python", "autoincrement", "computed"]
+    type: GeneratorType
 
 
 class TableSpec(BaseModel):

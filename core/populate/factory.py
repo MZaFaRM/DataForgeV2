@@ -6,6 +6,7 @@ import math
 from numbers import Number
 import os
 from collections.abc import Sequence
+from pathlib import Path
 import random
 import re
 from typing import Any, Callable
@@ -21,7 +22,8 @@ from sqlalchemy.engine import Engine, Inspector
 from sqlalchemy.engine.reflection import Inspector
 
 from core.helpers import cap_string, cap_numeric
-from core.populate.config import ConfigDatabase
+from core.populate.config import DBFRegistry
+from core.settings import DB_PATH, LOG_PATH
 from core.utils.decorators import requires
 from core.utils.exceptions import MissingRequiredAttributeError, VerificationError
 from core.utils.types import GeneratorType as GType
@@ -42,6 +44,7 @@ class DatabaseFactory:
         self.port = ""
         self.name = ""
         self.password = ""
+        self.registry = DBFRegistry()
 
     def to_dict(self) -> dict:
         return {
@@ -94,14 +97,16 @@ class DatabaseFactory:
     def inspector(self) -> Inspector:
         return inspect(self._engine)
 
-    def setup_logging(self, log_path: str = "sqlalchemy.log"):
+    def setup_logging(self):
         logger = logging.getLogger("sqlalchemy")
         logger.setLevel(logging.INFO)
         logger.propagate = False
 
         logger.handlers.clear()
+        log_path = Path(os.path.join(LOG_PATH, f"{self.name}.sql.log"))
+        log_path.parent.mkdir(parents=True, exist_ok=True)
 
-        file_handler = logging.FileHandler(f"{self.name}.{log_path}", mode="w")
+        file_handler = logging.FileHandler(log_path, mode="a")
         file_handler.setLevel(logging.INFO)
         formatter = logging.Formatter("%(asctime)s [%(levelname)s] %(message)s")
         file_handler.setFormatter(formatter)
@@ -115,10 +120,8 @@ class DatabaseFactory:
             sub_logger.handlers.clear()
             sub_logger.addHandler(file_handler)
 
-    def read_logs(
-        self, log_path: str = "sqlalchemy.log", lines: int = 100
-    ) -> list[str]:
-        log_file = f"{self.name}.{log_path}"
+    def read_logs(self, lines: int = 100) -> list[str]:
+        log_file = os.path.join(LOG_PATH, f"{self.name}.sql.log")
         if not os.path.exists(log_file):
             return []
 
@@ -127,8 +130,8 @@ class DatabaseFactory:
 
         return [log.strip() for log in logs]
 
-    def clear_logs(self, log_path: str = "sqlalchemy.log"):
-        log_file = f"{self.name}.{log_path}"
+    def clear_logs(self):
+        log_file = os.path.join(LOG_PATH, f"{self.name}.sql.log")
         if os.path.exists(log_file):
             with open(log_file, "w") as f:
                 f.write("")
@@ -141,8 +144,8 @@ class DatabaseFactory:
         return self._url
 
     @requires("host", "user", "port", "name", "password")
-    def save(self, configs_db: ConfigDatabase):
-        configs_db.save_cred(
+    def save(self):
+        pk = self.registry.save_cred(
             DbCredsSchema(
                 name=self.name,
                 host=self.host,
@@ -151,11 +154,10 @@ class DatabaseFactory:
                 user=self.user,
             )
         )
+        self.id = pk
 
-    def load(
-        self, configs_db: ConfigDatabase, name: str, host: str, port: str, user: str
-    ) -> bool:
-        creds = configs_db.load_cred(name=name, host=host, port=port, user=user)
+    def load(self, name: str, host: str, port: str, user: str) -> bool:
+        creds = self.registry.load_cred(name=name, host=host, port=port, user=user)
         if creds:
             self.id = creds.id
             self.host = creds.host

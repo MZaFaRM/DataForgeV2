@@ -27,9 +27,7 @@ class DbCreds(Base):
     _password = Column("password", String, nullable=False)
 
     __tablename__ = "db_creds"
-    __table_args__ = (
-        UniqueConstraint("name", "host", "port", name="uq_dbcreds_identity"),
-    )
+    __table_args__ = (UniqueConstraint("name", "host", "port", name="uq_dbcreds_identity"),)
 
     def __init__(self, **kwargs):
         raw_password = kwargs.pop("password", "")
@@ -46,25 +44,23 @@ class DbCreds(Base):
 
 
 class TableSpecModel(Base):
-    id = Column(Integer, primary_key=True)
+    id = Column(Integer, primary_key=True, autoincrement=True)
     db_id = Column(Integer, ForeignKey("db_creds.id", ondelete="CASCADE"), nullable=False)
-    name = Column(String(255), nullable=False, unique=True)
+    name = Column(String(255), nullable=False)
     no_of_entries = Column(Integer, nullable=False)
     columns = relationship("ColumnSpecModel", back_populates="table", cascade="all, delete-orphan")
 
     __tablename__ = "table_specs"
+    __table_args__ = (UniqueConstraint("db_id", "name", name="uq_table_name_per_db"),)
 
 
 class ColumnSpecModel(Base):
-    id = Column(Integer, primary_key=True)
+    id = Column(Integer, primary_key=True, autoincrement=True)
     name = Column(String(255), nullable=False)
-    null_chance = Column(Float, nullable=False)
     generator = Column(Text, nullable=True)
     type = Column(Enum(GeneratorType), nullable=False)
     table = relationship("TableSpecModel", back_populates="columns")
     table_id = Column(Integer, ForeignKey("table_specs.id", ondelete="CASCADE"), nullable=False)
 
     __tablename__ = "column_specs"
-
-
-db_path = os.path.join(os.path.expanduser("~"), ".dataforge", "config.db")
+    __table_args__ = (UniqueConstraint("table_id", "name", name="uq_column_name_per_table"),)

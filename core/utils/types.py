@@ -51,12 +51,12 @@ class TableMetadata(BaseModel):
 
 class ColumnSpec(BaseModel):
     name: str
-    null_chance: float
     generator: Optional[str] = None
     type: GeneratorType
 
 
 class TableSpec(BaseModel):
+    db_id: Optional[int] = None
     name: str
     no_of_entries: int
     columns: list[ColumnSpec]

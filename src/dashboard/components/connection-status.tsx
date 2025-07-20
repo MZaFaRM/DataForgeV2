@@ -64,33 +64,18 @@ export default function ConnectionSelector({
 }: ConnectionSelectorProps) {
   const [showDialog, setShowDialog] = useState(false)
   const [open, setOpen] = useState(false)
-  const [newDbInfo, setNewDbInfo] = useState<DBCreds | null>(null)
+  const [newDbCreds, setNewDbCreds] = useState<DBCreds | null>(null)
   const [dbConnecting, setDbConnecting] = useState(false)
   const [errorField, setErrorField] = useState<string | null>(null)
   const [showPassword, setShowPassword] = useState(false)
-  const [menuWidth, setMenuWidth] = useState<number | null>(null)
   const [dbList, setDbList] = useState<DBCreds[]>([])
-
-  const triggerRef = useRef<HTMLButtonElement>(null)
 
   useEffect(() => {
     handleListDbCreds()
-    handleDbInfo()
-
-    setTimeout(() => {
-      if (triggerRef.current) {
-        setMenuWidth(triggerRef.current.offsetWidth)
-      }
-    }, 1000)
+    handleDbCreds()
   }, [])
 
-  useEffect(() => {
-    if (triggerRef.current) {
-      setMenuWidth(triggerRef.current.offsetWidth)
-    }
-  }, [dbCreds])
-
-  const handleErrorField = (error: string) => {
+  function handleErrorField(error: string) {
     if (
       error.includes("Access denied for user") &&
       error.includes("(using password: YES)")
@@ -112,7 +97,7 @@ export default function ConnectionSelector({
     return error
   }
 
-  function handleDbInfo() {
+  function handleDbCreds() {
     setDbConnecting(true)
     invokeDbInfo()
       .then((payload) => {
@@ -162,17 +147,17 @@ export default function ConnectionSelector({
         console.log("Reconnected to the database:", creds)
         setDbCreds({ ...creds })
         setOpen(false)
-        setNewDbInfo(null)
+        setNewDbCreds(null)
       })
       .catch((error) => {
         console.error("Error reconnecting to the database:", error)
         setDbCreds(null)
-        setNewDbInfo((prev) => ({
+        setNewDbCreds((prev) => ({
           ...prev!,
           error: handleErrorField(error?.message || String(error)),
         }))
       })
-    handleDbInfo()
+    handleDbCreds()
   }
 
   function handleDbCredsRemove(creds: DBCreds) {
@@ -190,20 +175,21 @@ export default function ConnectionSelector({
     setDbConnecting(true)
 
     invokeDbConnection({
-      host: newDbInfo?.host || "localhost",
-      port: newDbInfo?.port || "3306",
-      user: newDbInfo?.user ?? "root",
-      name: newDbInfo?.name ?? "",
-      password: newDbInfo?.password ?? "",
+      host: newDbCreds?.host || "localhost",
+      port: newDbCreds?.port || "3306",
+      user: newDbCreds?.user ?? "root",
+      name: newDbCreds?.name ?? "",
+      password: newDbCreds?.password ?? "",
     })
       .then((res) => {
+        console.log("Connected to the database:", res)
         if (res) {
-          handleDbInfo()
+          handleDbCreds()
           handleListDbCreds()
-          setNewDbInfo(res)
+          setDbCreds(res)
 
           setTimeout(() => {
-            setNewDbInfo(null)
+            setNewDbCreds(null)
             setShowDialog(false)
           }, 1000)
         } else {
@@ -211,14 +197,14 @@ export default function ConnectionSelector({
         }
       })
       .catch((error) => {
-        setNewDbInfo((prev) => ({
+        setNewDbCreds((prev) => ({
           ...prev!,
           error: handleErrorField(error?.message || String(error)),
         }))
 
         setTimeout(() => {
           setErrorField(null)
-          setNewDbInfo((prev) => ({
+          setNewDbCreds((prev) => ({
             ...prev!,
             error: "",
           }))
@@ -250,7 +236,6 @@ export default function ConnectionSelector({
               role="combobox"
               aria-expanded={open}
               className="w-[200px]"
-              ref={triggerRef}
             >
               {dbCreds?.name ? (
                 <>
@@ -287,7 +272,7 @@ export default function ConnectionSelector({
               <CommandEmpty>No DB found.</CommandEmpty>
               <CommandSeparator />
               <CommandGroup heading="Actions">
-                <CommandItem onSelect={handleDbInfo}>
+                <CommandItem onSelect={handleDbCreds}>
                   <Icon
                     icon="mdi:refresh"
                     className={cn(
@@ -337,8 +322,9 @@ export default function ConnectionSelector({
                         icon="solar:database-bold-duotone"
                         className={cn(
                           "mr-2 h-4 w-4",
-                          "text-green-500"
-                          // dbCreds?.name === conn.name  "text-green-500" : "text-red-500"
+                          dbCreds?.id === conn.id
+                            ? "text-green-500"
+                            : "text-red-500"
                         )}
                       />
                     </div>
@@ -399,9 +385,9 @@ export default function ConnectionSelector({
                     id="host"
                     placeholder="localhost"
                     required
-                    defaultValue={newDbInfo?.host || "localhost"}
+                    defaultValue={newDbCreds?.host || "localhost"}
                     onChange={(e) =>
-                      setNewDbInfo((prev) => ({
+                      setNewDbCreds((prev) => ({
                         ...prev!,
                         host: e.target.value,
                       }))
@@ -417,9 +403,9 @@ export default function ConnectionSelector({
                   <Input
                     id="port"
                     placeholder="3306"
-                    defaultValue={newDbInfo?.port || "3306"}
+                    defaultValue={newDbCreds?.port || "3306"}
                     onChange={(e) =>
-                      setNewDbInfo((prev) => ({
+                      setNewDbCreds((prev) => ({
                         ...prev!,
                         port: e.target.value,
                       }))
@@ -435,9 +421,9 @@ export default function ConnectionSelector({
                   <Input
                     id="user"
                     placeholder="root"
-                    defaultValue={newDbInfo?.user || "root"}
+                    defaultValue={newDbCreds?.user || "root"}
                     onChange={(e) =>
-                      setNewDbInfo((prev) => ({
+                      setNewDbCreds((prev) => ({
                         ...prev!,
                         user: e.target.value,
                       }))
@@ -453,9 +439,9 @@ export default function ConnectionSelector({
                   <Input
                     id="name"
                     required
-                    defaultValue={newDbInfo?.name || ""}
+                    defaultValue={newDbCreds?.name || ""}
                     onChange={(e) =>
-                      setNewDbInfo((prev) => ({
+                      setNewDbCreds((prev) => ({
                         ...prev!,
                         name: e.target.value,
                       }))
@@ -475,9 +461,9 @@ export default function ConnectionSelector({
                     id="password"
                     type={showPassword ? "text" : "password"}
                     required
-                    defaultValue={newDbInfo?.password || ""}
+                    defaultValue={newDbCreds?.password || ""}
                     onChange={(e) =>
-                      setNewDbInfo((prev) => ({
+                      setNewDbCreds((prev) => ({
                         ...prev!,
                         password: e.target.value,
                       }))
@@ -499,9 +485,9 @@ export default function ConnectionSelector({
             </div>
           </div>
           <div className="-mt-4 flex justify-center">
-            {newDbInfo?.error && (
+            {newDbCreds?.error && (
               <p className="text-center text-sm text-red-500">
-                {newDbInfo.error}
+                {newDbCreds.error}
               </p>
             )}
           </div>
@@ -513,7 +499,7 @@ export default function ConnectionSelector({
               type="submit"
               className={
                 "min-w-[100px] " +
-                (newDbInfo?.id
+                (newDbCreds?.id
                   ? " cursor-not-allowed bg-green-600 text-white hover:bg-green-600"
                   : dbConnecting
                     ? "cursor-not-allowed"
@@ -523,7 +509,7 @@ export default function ConnectionSelector({
                 handleNewDbConnection()
               }}
             >
-              {newDbInfo?.id ? (
+              {newDbCreds?.id ? (
                 "Connected!"
               ) : dbConnecting ? (
                 <Icons.spinner className="mr-2 h-4 w-4 animate-spin" />

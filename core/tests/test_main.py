@@ -44,7 +44,9 @@ def test_handle_connect_missing_params(runner: Runner):
 
 
 # def test_connect_success(runner: Runner):
-#     req = Request(kind="connect", body=TEST_CREDS)
+#     creds = TEST_CREDS.copy()
+#     creds["password"] = "1234567890"
+#     req = Request(kind="connect", body=creds)
 #     res = runner.handle_command(req)
 #     assert res["status"] == "ok", res["error"]
 
@@ -134,25 +136,21 @@ def test_verify_teachers_table_spec(runner: Runner):
         "columns": [
             {
                 "name": "teacher_id",
-                "nullChance": 0,
                 "generator": "autoincrement",
                 "type": "autoincrement",
             },
             {
                 "name": "full_name",
-                "nullChance": 0,
                 "generator": "name",
                 "type": "faker",
             },
             {
                 "name": "department",
-                "nullChance": 0,
                 "generator": "^(CS|MECH|CIVIL|IT)$",
                 "type": "regex",
             },
             {
                 "name": "salary",
-                "nullChance": 0,
                 "generator": "# import builtins + faker\n# Py fields run after faker/foreign/regex/etc\nimport random\n@order(1)\ndef generator(columns):\n\treturn random.randint(30_000, 60_000)\n",
                 "type": "python",
             },
@@ -165,3 +163,13 @@ def test_verify_teachers_table_spec(runner: Runner):
         response["payload"]["errors"] == []
     ), "Errors found in table spec verification"
     assert len(response["payload"]["entries"][0]) == len(response["payload"]["columns"])
+
+
+def test_load_spec(runner: Runner):
+    req = Request(kind="reconnect", body=TEST_CREDS)
+    res = runner.handle_command(req)
+    assert res["status"] == "ok", res["error"]
+    
+    body = {"dbId":1,"tableName":"teachers"}
+    response = runner.handle_command(Request(kind="load_spec", body=body))
+    assert response["status"] == "ok", f"Load spec failed: {response['error']}"

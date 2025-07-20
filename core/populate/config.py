@@ -4,22 +4,25 @@ from typing import Optional
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 
-from core.utils.models import Base, DbCreds, db_path
-from core.utils.types import DbCredsSchema, TableSpec
+from core.utils.models import Base, ColumnSpecModel, DbCreds, TableSpecModel
+from core.utils.types import ColumnSpec, DbCredsSchema, TableSpec
+from core.settings import DB_PATH
 
 
-class ConfigDatabase:
+class DBFRegistry:
     def __init__(self):
-        os.makedirs(os.path.dirname(db_path), exist_ok=True)
-        self.engine = create_engine(f"sqlite:///{db_path}", echo=False)
+        self.engine = create_engine(f"sqlite:///{DB_PATH}", echo=False)
         Base.metadata.create_all(self.engine)
         self.Session = sessionmaker(bind=self.engine)
 
     def save_cred(self, cred: DbCredsSchema):
         with self.Session() as session:
             db_cred = DbCreds(**cred.model_dump())
-            session.merge(db_cred)
+            session.add(db_cred)
+            session.flush()
+            pk = int(db_cred.id)  # type: ignore
             session.commit()
+            return pk
 
     def load_cred(
         self, name: str, host: str, port: str, user: str
@@ -63,4 +66,40 @@ class ConfigDatabase:
                 session.commit()
 
     def save_specs(self, spec: TableSpec):
-        pass
+        with self.Session() as session:
+            row = (
+                session.query(TableSpecModel)
+                .filter_by(db_id=spec.db_id, name=spec.name)
+                .first()
+            )
+            if row:
+                session.delete(row)
+
+            db_spec = TableSpecModel(
+                db_id=spec.db_id,
+                name=spec.name,
+                no_of_entries=spec.no_of_entries,
+                columns=[ColumnSpecModel(**col.model_dump()) for col in spec.columns],
+            )
+            session.merge(db_spec)
+            session.commit()
+
+    def get_spec(self, db_id: int, table_name: str) -> TableSpec | None:
+        with self.Session() as session:
+            row = (
+                session.query(TableSpecModel)
+                .filter_by(db_id=db_id, name=table_name)
+                .first()
+            )
+            if row:
+                spec = TableSpec.model_validate(
+                    {
+                        **row.__dict__,
+                        "columns": [
+                            ColumnSpec.model_validate(col.__dict__)
+                            for col in row.columns
+                        ],
+                    }
+                )
+                return spec
+            return None

@@ -1,29 +1,14 @@
-import ast
 import contextlib
-import math
-from dataclasses import dataclass
-from numbers import Number
-import random
-import re
-from typing import Any, Callable, cast
+from typing import Any
 
 from faker import Faker
-import rstr
-import faker
 
-from core.helpers import cap_numeric, cap_string
-from core.utils.decorators import with_cache
-from core.utils.exceptions import ValidationError, ValidationWarning, VerificationError
-from .factory import ContextFactory, DatabaseFactory, GeneratorFactory
+from core.utils.exceptions import ValidationError, ValidationWarning
+from core.utils.types import ColumnMetadata, ColumnSpec, ErrorPacket
 from core.utils.types import GeneratorType as GType
-from core.utils.types import (
-    ColumnMetadata,
-    ColumnSpec,
-    ErrorPacket,
-    TableMetadata,
-    TablePacket,
-    TableSpec,
-)
+from core.utils.types import TableMetadata, TablePacket, TableSpec
+
+from .factory import ContextFactory, DatabaseFactory, GeneratorFactory
 
 
 class Populator:
@@ -46,15 +31,19 @@ class Populator:
 
     def resolve_specifications(
         self, dbf: DatabaseFactory, table_spec: TableSpec
-    ) -> TablePacket:
+    ) -> tuple[TableSpec, TablePacket]:
+        table_spec.db_id = dbf.id or -1
         _errors, ordered_columns = self._validate_and_sort_specs(table_spec.columns)
         errors, entries = self.build_table_entries(dbf, ordered_columns, table_spec)
 
-        return TablePacket(
-            name=table_spec.name,
-            columns=[col.name for col in table_spec.columns],
-            entries=entries,
-            errors=_errors + errors,
+        return (
+            table_spec,
+            TablePacket(
+                name=table_spec.name,
+                columns=[col.name for col in table_spec.columns],
+                entries=entries,
+                errors=_errors + errors,
+            ),
         )
 
     def build_table_entries(

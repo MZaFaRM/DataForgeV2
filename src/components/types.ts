@@ -71,7 +71,6 @@ export interface TableSpec {
 }
 export interface ColumnSpec {
   name: string
-  nullChance: number
   generator: string | null
   type: GeneratorType
 }

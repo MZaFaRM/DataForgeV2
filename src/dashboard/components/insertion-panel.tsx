@@ -1,6 +1,10 @@
-import { useEffect, useRef, useState } from "react"
+import { act, useEffect, useRef, useState } from "react"
 import { invokeRunSql, invokeTableData } from "@/api/db"
-import { invokeGetFakerMethods, invokeVerifySpec } from "@/api/fill"
+import {
+  invokeGetFakerMethods,
+  invokeLoadSpec,
+  invokeVerifySpec,
+} from "@/api/fill"
 import InsertTab from "@/dashboard/components/ui/insert-tab"
 import RenderLogs from "@/dashboard/components/ui/log-tab"
 import RenderPreview from "@/dashboard/components/ui/preview-tab"
@@ -108,7 +112,7 @@ export default function InsertionPanel({
 
   useEffect(() => {
     if (activeTab === "preview" && (!tablePackets || pendingRefresh)) {
-      verifyTableSpec()
+      handleVerifyTableSpec()
       return
     }
   }, [activeTab])
@@ -125,25 +129,8 @@ export default function InsertionPanel({
         setTableData(null)
         return
       }
-
       setTableData(table)
-      setTableSpecs(() => ({
-        name: table.name,
-        noOfEntries: globalSpecs[table.name]?.noOfEntries ?? 50,
-        columns:
-          globalSpecs[table.name]?.columns ??
-          Object.fromEntries(
-            table.columns.map((col) => [
-              col.name,
-              {
-                name: col.name,
-                nullChance: 0,
-                generator: null,
-                type: "faker",
-              },
-            ])
-          ),
-      }))
+      loadTableSpecs(table)
     } catch (err) {
       console.error("Error fetching table data:", err)
       setTableData(null)
@@ -162,6 +149,47 @@ export default function InsertionPanel({
         },
       }
     })
+  }
+
+  function loadTableSpecs(tbl: TableMetadata | null = null) {
+    const table = tbl || tableData
+    if (!table) return
+
+    console.log("Initialized specs")
+    let ts: TableSpecEntry = {
+      name: table.name,
+      noOfEntries: 50,
+      columns: table.columns.reduce((acc, col) => {
+        acc[col.name] = {
+          name: col.name,
+          generator: null,
+          type: "faker",
+        }
+        return acc
+      }, {} as ColumnSpecMap),
+    }
+
+    if (!!globalSpecs[table.name]) {
+      console.log("Found name in globals")
+      ts = globalSpecs[table.name]
+    } else if (dbCreds?.id) {
+      console.log("found only in db")
+      invokeLoadSpec(dbCreds.id, table.name).then((spec) => {
+        console.log(spec)
+        if (!spec) return
+        ts.noOfEntries = spec.noOfEntries
+        ts.columns = spec.columns.reduce((acc, col) => {
+          acc[col.name] = {
+            name: col.name,
+            type: col.type,
+            generator: col.generator,
+          }
+          return acc
+        }, {} as ColumnSpecMap)
+      })
+    }
+    console.log("loaded specs", ts)
+    setTableSpecs(ts)
   }
 
   function runSql() {
@@ -213,7 +241,7 @@ export default function InsertionPanel({
     }
   }
 
-  function verifyTableSpec() {
+  function handleVerifyTableSpec() {
     if (!activeTable) return
 
     const tableSpec: TableSpec = {
@@ -221,6 +249,7 @@ export default function InsertionPanel({
       noOfEntries: tableSpecs?.noOfEntries || 50,
       columns: Object.values(tableSpecs?.columns!) as ColumnSpec[],
     }
+    console.log("Verifying table spec:", tableSpec)
     invokeVerifySpec(tableSpec)
       .then((res) => {
         setTablePackets(res)
@@ -400,7 +429,7 @@ export default function InsertionPanel({
                 <RenderPreview
                   tableMetadata={tableData}
                   tablePackets={tablePackets}
-                  doRefresh={verifyTableSpec}
+                  doRefresh={handleVerifyTableSpec}
                   noOfRows={tableSpecs?.noOfEntries}
                   setNoOfRows={(rows) =>
                     setTableSpecs((prev) => {

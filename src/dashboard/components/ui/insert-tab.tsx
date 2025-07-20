@@ -53,23 +53,6 @@ export default function InsertTab({
   const thisGroup = column.multiUnique || column.unique ? [column.name] : []
   const inHovered = hoveredGroup?.includes(column.name)
 
-  useEffect(() => {
-    console.log("ColumnSpec changed:", columnSpec)
-  }, [columnSpec])
-
-  const nullReason = column.primaryKey
-    ? "is primary key"
-    : column.autoincrement
-      ? "auto-increments"
-      : !!column.default
-        ? "has default value"
-        : !column.nullable
-          ? "is not nullable"
-          : column.computed
-            ? "is computed"
-            : thisGroup.length > 0
-              ? "is unique"
-              : ""
 
   return (
     <TableRow
@@ -114,16 +97,6 @@ export default function InsertTab({
 
       <TableCell>{column.type}</TableCell>
 
-      {/* <TableCell>
-        <RenderNullChanceControl
-          nullReason={nullReason}
-          nullProbability={columnSpec.nullChance * 10}
-          setNullProbability={(val) =>
-            setColumnSpec({ ...columnSpec, nullChance: val / 10 })
-          }
-        />
-      </TableCell> */}
-
       <TableCell>
         <GeneratorTypeSelect
           selected={columnSpec.type}
@@ -146,73 +119,6 @@ export default function InsertTab({
         />
       </TableCell>
     </TableRow>
-  )
-}
-
-interface RenderNullChanceControlProps {
-  nullReason: string
-  nullProbability: number
-  setNullProbability: Dispatch<SetStateAction<number>>
-}
-
-function RenderNullChanceControl({
-  nullReason,
-  nullProbability,
-  setNullProbability,
-}: RenderNullChanceControlProps) {
-  return (
-    <div
-      className="w-[100px]"
-      title={nullReason || `${nullProbability}% inserted values will be null`}
-    >
-      <Popover>
-        <PopoverTrigger asChild>
-          <div className="flex items-center">
-            <Icon
-              icon="tabler:salt"
-              className={cn(
-                "mr-2 h-4 w-4",
-                nullReason
-                  ? "cursor-not-allowed text-stone-500"
-                  : "cursor-pointer"
-              )}
-            />
-            <Badge
-              variant={nullProbability > 0 ? "outline" : "secondary"}
-              className={cn(
-                nullReason
-                  ? "cursor-not-allowed text-muted-foreground"
-                  : "cursor-pointer"
-              )}
-              onClick={(e) => {
-                if (nullReason) return
-                e.stopPropagation()
-                e.preventDefault()
-                setNullProbability((prev) =>
-                  prev === 0 ? 1 : prev === 1 ? 5 : prev == 5 ? 10 : 0
-                )
-              }}
-            >
-              {nullProbability}%
-            </Badge>
-          </div>
-        </PopoverTrigger>
-        <PopoverContent className="w-44 bg-popover text-sm font-semibold">
-          <label className="mb-2 block">
-            Chance of null: {nullProbability}%
-          </label>
-          <input
-            type="range"
-            min={0}
-            max={100}
-            value={nullProbability}
-            onChange={(e) => setNullProbability(Number(e.target.value))}
-            className="w-full"
-            disabled={Boolean(nullReason)}
-          />
-        </PopoverContent>
-      </Popover>
-    </div>
   )
 }
 
@@ -427,7 +333,7 @@ function RenderGenerator({
       </div>
     </div>
   ) : generatorTypeSelect === "python" ? (
-    <div className="w-[350px] overflow-auto rounded border">
+    <div className="w-[350px] overflow-clip rounded border">
       <CodeMirror
         placeholder={
           "# import builtins + faker\n" +
@@ -444,14 +350,11 @@ function RenderGenerator({
             "# def generator(columns):\n" +
             '#   return columns["name"].lower() + "@x.com"\n'
         }
-        onChange={(value) => {
-          console.log(value)
-          setSelected(value)
-        }}
+        onChange={setSelected}
         extensions={[python()]}
         theme={theme === "light" ? githubLight : githubDark}
         height="auto"
-        minHeight="35px"
+        minHeight="50px"
         maxHeight="200px"
         maxWidth="350px"
         basicSetup={{

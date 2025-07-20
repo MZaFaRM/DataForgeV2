@@ -7,9 +7,18 @@ export function invokeGetFakerMethods() {
 }
 
 export function invokeVerifySpec(tableSpec: TableSpec) {
-  console.log("Verify", tableSpec);
   return invokeAndExtract<TableSpec, TablePacket>({
     kind: "verify_spec",
     body: tableSpec,
+  })
+}
+
+export function invokeLoadSpec(dbId: number, tableName: string) {
+  return invokeAndExtract<Record<string, string | number>, TableSpec>({
+    kind: "load_spec",
+    body: {
+      dbId: dbId,
+      tableName: tableName,
+    },
   })
 }

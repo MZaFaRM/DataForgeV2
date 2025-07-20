@@ -1,22 +1,41 @@
 import json
+import os
+from pathlib import Path
 import sys
 import threading
 import traceback
 from typing import Any
 
-from core.populate.config import ConfigDatabase
-from core.utils.types import DbCredsSchema, TableSpec
+from core.settings import LOG_PATH
+from core.utils.types import TableSpec
 
 from core.populate.populator import Populator
 from core.populate.factory import DatabaseFactory
 from core.utils.response import Request, Response
 
 
+import logging
+
+
 class Runner:
     def __init__(self):
         self.dbf = DatabaseFactory()
         self.populator = Populator()
-        self.configs_db = ConfigDatabase()
+        self._setup_logger()
+
+    def _setup_logger(self):
+        self.logger = logging.getLogger("RunnerLogger")
+        self.logger.setLevel(logging.INFO)
+        log_path = Path(os.path.join(LOG_PATH, "runner.log"))
+        log_path.parent.mkdir(parents=True, exist_ok=True)
+
+        os.makedirs(os.path.dirname(log_path), exist_ok=True)
+        handler = logging.FileHandler(log_path, mode="a")
+        formatter = logging.Formatter(
+            "%(asctime)s | %(levelname)s | %(message)s", "%Y-%m-%d %H:%M:%S"
+        )
+        handler.setFormatter(formatter)
+        self.logger.addHandler(handler)
 
     def listen(self):
         for line in sys.stdin:
@@ -29,15 +48,17 @@ class Runner:
                 break
 
             try:
+                self.logger.info(f"Received: {line}")
                 req = json.loads(line)
                 req = Request(**req)
-                res = json.dumps(self.handle_command(req))
+                res_obj = self.handle_command(req)
+                res = json.dumps(res_obj)
+                self.logger.info(f"Response: {res}")
             except Exception as e:
-                res = Response(
-                    status="error",
-                    error=str(e),
-                    traceback=traceback.format_exc(),
-                ).to_dict()
+                tb = traceback.format_exc()
+                res_obj = Response(status="error", error=str(e), traceback=tb).to_dict()
+                res = json.dumps(res_obj)
+                self.logger.error(f"Error: {str(e)}\nTraceback: {tb}")
             finally:
                 print(res, flush=True)
 
@@ -82,7 +103,6 @@ class Runner:
             return self._err(msg)
 
         if not self.dbf.load(
-            configs_db=self.configs_db,
             name=creds["name"],
             user=creds["user"],
             host=creds["host"],
@@ -90,7 +110,7 @@ class Runner:
         ):
             self.dbf.from_dict(creds)
             self.dbf.connect()
-            self.dbf.save(configs_db=self.configs_db)
+            self.dbf.save()
         else:
             return self._err("Database credentials already saved, try reconnecting.")
 
@@ -107,7 +127,6 @@ class Runner:
             return self._err("Requires name, host and port to reconnect")
 
         if not self.dbf.load(
-            configs_db=self.configs_db,
             name=creds["name"],
             user=creds["user"],
             host=creds["host"],
@@ -119,7 +138,7 @@ class Runner:
         return self._ok(self.dbf.to_dict())
 
     def _handle_list_connections(self, _=None) -> dict:
-        creds = self.configs_db.list_creds()
+        creds = self.dbf.registry.list_creds()
         return self._ok(creds)
 
     def _handle_delete_connection(self, body: dict) -> dict:
@@ -131,7 +150,7 @@ class Runner:
         if name is None or host is None or port is None or user is None:
             return self._err("Requires name, host and port to delete connection")
 
-        self.configs_db.delete_cred(name=name, host=host, port=port, user=user)
+        self.dbf.registry.delete_cred(name=name, host=host, port=port, user=user)
         return self._ok("Connection deleted successfully.")
 
     def _handle_disconnect(self, _=None) -> dict:
@@ -175,10 +194,23 @@ class Runner:
         return self._ok(metadata.model_dump())
 
     def _handle_verify_spec(self, body: dict) -> dict:
-        spec = TableSpec(**body)
-        result = self.populator.resolve_specifications(self.dbf, spec)
-        self.configs_db.save_specs(spec)
+        specs, result = self.populator.resolve_specifications(
+            self.dbf, TableSpec(**body)
+        )
+        self.dbf.registry.save_specs(specs)
         return self._ok(result.model_dump())
+
+    def _handle_load_spec(self, body: dict) -> dict:
+        if "table_name" not in body or "db_id" not in body:
+            return self._err("Table name and db_id are required.")
+
+        spec = self.dbf.registry.get_spec(
+            db_id=body["db_id"], table_name=body["table_name"]
+        )
+        if not spec:
+            return self._err(f"No specification found for table '{body['name']}'.")
+
+        return self._ok(spec.model_dump())
 
     def _handle_run_sql(self, body: dict) -> dict:
         if body is None or "sql" not in body:

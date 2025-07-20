@@ -135,6 +135,8 @@ class Populator:
             "python": self.make_python,
             "foreign": self.make_foreign,
             "regex": self.make_regex,
+            "autoincrement": self.make_autoincrement,
+            "computed": self.make_computed
         }
         if col_spec.type in fns:
             return fns[col_spec.type]
@@ -222,7 +224,7 @@ class Populator:
         return [f"{max_val + i + 1} [auto]" for i in range(context.n)]
 
     def make_computed(self, context: Context) -> list:
-        return ["_expr_" for _ in range(context.n)]
+        return ["[expr]" for _ in range(context.n)]
 
     # endregion
 
@@ -318,15 +320,30 @@ class Populator:
         def check_foreign(generator: str):
             return True
 
+        def check_autoincrement(generator: str):
+            return True
+
+        def check_computed(generator: str):
+            return True
+
+        errors = []
+
         type_handlers = {
             "faker": check_faker,
             "regex": check_regex,
             "foreign": check_foreign,
+            "autoincrement": check_autoincrement,
+            "computed": check_computed,
             "python": None,  # handled separately
         }
-        errors = []
-
-        groups = {"faker": [], "regex": [], "foreign": [], "python": {}}
+        groups = {
+            "faker": [],
+            "regex": [],
+            "foreign": [],
+            "autoincrement": [],
+            "computed": [],
+            "python": {},
+        }
 
         for c_spec in specs:
             if c_spec.type is None or c_spec.generator is None:
@@ -336,7 +353,7 @@ class Populator:
                 ctype = c_spec.type
 
                 if ctype == "python":
-                    order = check_python(c_spec.generator) or 0
+                    order = check_python(c_spec.generator) or 0  # type: ignore
                     while order in groups["python"]:
                         order += 1
                     groups["python"][order] = c_spec
@@ -366,6 +383,8 @@ class Populator:
             groups["faker"]
             + groups["regex"]
             + groups["foreign"]
+            + groups["autoincrement"]
+            + groups["computed"]
             + [spec for _, spec in sorted(groups["python"].items())]
         )
         return errors, result

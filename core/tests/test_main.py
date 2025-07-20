@@ -135,7 +135,7 @@ def test_verify_teachers_table_spec(runner: Runner):
             {
                 "name": "teacher_id",
                 "nullChance": 0,
-                "generator": None,
+                "generator": "autoincrement",
                 "type": "autoincrement",
             },
             {
@@ -153,7 +153,7 @@ def test_verify_teachers_table_spec(runner: Runner):
             {
                 "name": "salary",
                 "nullChance": 0,
-                "generator": "# import builtins + faker\n# Py fields run after faker/foreign/regex/etc\n# def generator(columns, faker): -> str\n  return random.randint(30_000, 60_000)\n",
+                "generator": "# import builtins + faker\n# Py fields run after faker/foreign/regex/etc\nimport random\n@order(1)\ndef generator(columns):\n\treturn random.randint(30_000, 60_000)\n",
                 "type": "python",
             },
         ],
@@ -161,3 +161,7 @@ def test_verify_teachers_table_spec(runner: Runner):
 
     response = runner.handle_command(Request(kind="verify_spec", body=payload))
     assert response["status"] == "ok", f"Verify spec failed: {response['error']}"
+    assert (
+        response["payload"]["errors"] == []
+    ), "Errors found in table spec verification"
+    assert len(response["payload"]["entries"][0]) == len(response["payload"]["columns"])

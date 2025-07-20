@@ -118,12 +118,13 @@ export default function ConnectionSelector({
       .then((payload) => {
         if (payload && payload.connected) {
           setDbData({ ...payload })
-          setDbConnecting(false)
         }
       })
       .catch((error) => {
         console.error("Error fetching database info:", error)
         setDbData(null)
+      })
+      .finally(() => {
         setDbConnecting(false)
       })
   }

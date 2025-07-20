@@ -51,20 +51,20 @@ import {
   PopoverTrigger,
 } from "@/components/ui/popover"
 import { Icons } from "@/components/icons"
-import { DBCreds, DbData } from "@/components/types"
+import { DBCreds } from "@/components/types"
 
 interface ConnectionSelectorProps {
-  dbData: DbData | null
-  setDbData: (info: DbData | null) => void
+  dbCreds: DBCreds | null
+  setDbCreds: (info: DBCreds | null) => void
 }
 
 export default function ConnectionSelector({
-  dbData,
-  setDbData,
+  dbCreds,
+  setDbCreds,
 }: ConnectionSelectorProps) {
   const [showDialog, setShowDialog] = useState(false)
   const [open, setOpen] = useState(false)
-  const [newDbInfo, setNewDbInfo] = useState<DbData | null>(null)
+  const [newDbInfo, setNewDbInfo] = useState<DBCreds | null>(null)
   const [dbConnecting, setDbConnecting] = useState(false)
   const [errorField, setErrorField] = useState<string | null>(null)
   const [showPassword, setShowPassword] = useState(false)
@@ -88,7 +88,7 @@ export default function ConnectionSelector({
     if (triggerRef.current) {
       setMenuWidth(triggerRef.current.offsetWidth)
     }
-  }, [dbData])
+  }, [dbCreds])
 
   const handleErrorField = (error: string) => {
     if (
@@ -116,13 +116,13 @@ export default function ConnectionSelector({
     setDbConnecting(true)
     invokeDbInfo()
       .then((payload) => {
-        if (payload && payload.connected) {
-          setDbData({ ...payload })
+        if (payload && payload.id) {
+          setDbCreds({ ...payload })
         }
       })
       .catch((error) => {
         console.error("Error fetching database info:", error)
-        setDbData(null)
+        setDbCreds(null)
       })
       .finally(() => {
         setDbConnecting(false)
@@ -148,7 +148,7 @@ export default function ConnectionSelector({
   function handleDbDisconnect() {
     invokeDbDisconnect()
       .then(() => {
-        setDbData(null)
+        setDbCreds(null)
         console.log("Disconnected from the database.")
       })
       .catch((error) => {
@@ -160,13 +160,13 @@ export default function ConnectionSelector({
     invokeDbReconnection(creds)
       .then((data) => {
         console.log("Reconnected to the database:", creds)
-        setDbData({ ...creds, connected: true })
+        setDbCreds({ ...creds })
         setOpen(false)
         setNewDbInfo(null)
       })
       .catch((error) => {
         console.error("Error reconnecting to the database:", error)
-        setDbData(null)
+        setDbCreds(null)
         setNewDbInfo((prev) => ({
           ...prev!,
           error: handleErrorField(error?.message || String(error)),
@@ -196,14 +196,11 @@ export default function ConnectionSelector({
       name: newDbInfo?.name ?? "",
       password: newDbInfo?.password ?? "",
     })
-      .then((success) => {
-        if (success) {
+      .then((res) => {
+        if (res) {
           handleDbInfo()
           handleListDbCreds()
-          setNewDbInfo((prev) => ({
-            ...prev!,
-            connected: true,
-          }))
+          setNewDbInfo(res)
 
           setTimeout(() => {
             setNewDbInfo(null)
@@ -255,7 +252,7 @@ export default function ConnectionSelector({
               className="w-[200px]"
               ref={triggerRef}
             >
-              {dbData?.name ? (
+              {dbCreds?.name ? (
                 <>
                   <div>
                     <Icon
@@ -264,7 +261,7 @@ export default function ConnectionSelector({
                     />
                   </div>
                   <div className="truncate">
-                    <p className="truncate">{dbData.name}</p>
+                    <p className="truncate">{dbCreds.name}</p>
                   </div>
                 </>
               ) : (
@@ -300,7 +297,7 @@ export default function ConnectionSelector({
                   />
                   Refresh
                 </CommandItem>
-                {dbData?.name && (
+                {dbCreds?.name && (
                   <>
                     <CommandItem
                       onSelect={() => !dbConnecting && handleDbDisconnect()}
@@ -314,7 +311,7 @@ export default function ConnectionSelector({
 
                     <CommandItem
                       onSelect={() =>
-                        !dbConnecting && handleDbCredsRemove(dbData)
+                        !dbConnecting && handleDbCredsRemove(dbCreds)
                       }
                     >
                       <Icon
@@ -341,7 +338,7 @@ export default function ConnectionSelector({
                         className={cn(
                           "mr-2 h-4 w-4",
                           "text-green-500"
-                          // dbData?.name === conn.name  "text-green-500" : "text-red-500"
+                          // dbCreds?.name === conn.name  "text-green-500" : "text-red-500"
                         )}
                       />
                     </div>
@@ -352,7 +349,9 @@ export default function ConnectionSelector({
                     <CheckIcon
                       className={cn(
                         "ml-auto h-4 w-4",
-                        dbData?.name === conn.name ? "opacity-100" : "opacity-0"
+                        dbCreds?.name === conn.name
+                          ? "opacity-100"
+                          : "opacity-0"
                       )}
                     />
                   </CommandItem>
@@ -514,7 +513,7 @@ export default function ConnectionSelector({
               type="submit"
               className={
                 "min-w-[100px] " +
-                (newDbInfo?.connected
+                (newDbInfo?.id
                   ? " cursor-not-allowed bg-green-600 text-white hover:bg-green-600"
                   : dbConnecting
                     ? "cursor-not-allowed"
@@ -524,7 +523,7 @@ export default function ConnectionSelector({
                 handleNewDbConnection()
               }}
             >
-              {newDbInfo?.connected ? (
+              {newDbInfo?.id ? (
                 "Connected!"
               ) : dbConnecting ? (
                 <Icons.spinner className="mr-2 h-4 w-4 animate-spin" />

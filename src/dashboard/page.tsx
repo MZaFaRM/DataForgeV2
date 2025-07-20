@@ -19,10 +19,10 @@ import {
 } from "@/components/ui/card"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { TooltipProvider } from "@/components/ui/tooltip"
-import { DbData } from "@/components/types"
+import { DBCreds } from "@/components/types"
 
 export default function DashboardPage() {
-  const [dbData, setDbData] = useState<DbData | null>(null)
+  const [dbCreds, setDbCreds] = useState<DBCreds | null>(null)
   const [activeTable, setActiveTable] = useState<string | null>(null)
 
   return (
@@ -48,16 +48,16 @@ export default function DashboardPage() {
                 would mean a lot.
               </p>
             </div>
-            <ConnectionStatus dbData={dbData} setDbData={setDbData} />
+            <ConnectionStatus dbCreds={dbCreds} setDbCreds={setDbCreds} />
           </div>
           <div className="flex flex-row space-y-4">
             <ListTables
-              dbData={dbData}
+              dbCreds={dbCreds}
               setActiveTable={setActiveTable}
               activeTable={activeTable}
             />
             <InsertionPanel
-              dbData={dbData}
+              dbCreds={dbCreds}
               activeTable={activeTable}
               setActiveTable={setActiveTable}
             />

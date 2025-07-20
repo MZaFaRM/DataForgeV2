@@ -7,7 +7,7 @@ def requires(*attrs: str, error_msg: str = ""):
         @wraps(func)
         def wrapper(self, *args, **kwargs):
             for attr_name in attrs:
-                if not getattr(self, attr_name, None):
+                if getattr(self, attr_name, None) in [None, ""]:
                     raise MissingRequiredAttributeError(
                         error_msg or f"'{attr_name}' is required but not initialized."
                     )

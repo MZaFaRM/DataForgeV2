@@ -4,7 +4,7 @@ import threading
 import traceback
 from typing import Any
 
-from core.populate.config import ConfigHandler
+from core.populate.config import ConfigDatabase
 from core.utils.types import DbCredsSchema, TableSpec
 
 from core.populate.populator import Populator
@@ -16,7 +16,7 @@ class Runner:
     def __init__(self):
         self.dbf = DatabaseFactory()
         self.populator = Populator()
-        self.configs = ConfigHandler()
+        self.configs_db = ConfigDatabase()
 
     def listen(self):
         for line in sys.stdin:
@@ -81,33 +81,45 @@ class Runner:
             )
             return self._err(msg)
 
-        self.dbf.from_dict(creds)
-        self.dbf.connect()
-        schema = self.dbf.to_schema()
-        self.configs.save_cred(schema)
+        if not self.dbf.load(
+            configs_db=self.configs_db,
+            name=creds["name"],
+            user=creds["user"],
+            host=creds["host"],
+            port=creds["port"],
+        ):
+            self.dbf.from_dict(creds)
+            self.dbf.connect()
+            self.dbf.save(configs_db=self.configs_db)
+        else:
+            return self._err("Database credentials already saved, try reconnecting.")
+
         return self._ok(self.dbf.to_dict())
 
-    def _handle_reconnect(self, body: dict):
-        if not body:
+    def _handle_reconnect(self, creds: dict):
+        if not creds:
             return self._err("DB details needed.")
+
         name, host, port, user = (
-            body.get(cred, None) for cred in ("name", "host", "port", "user")
+            creds.get(cred, None) for cred in ("name", "host", "port", "user")
         )
-        if name is None or host is None or port is None or user is None:
+        if None in (name, host, port, user):
             return self._err("Requires name, host and port to reconnect")
 
-        creds_schema = self.configs.load_cred(
-            name=name, host=host, port=port, user=user
-        )
-        if not creds_schema:
-            return self._err("No DB with that credentials found.")
+        if not self.dbf.load(
+            configs_db=self.configs_db,
+            name=creds["name"],
+            user=creds["user"],
+            host=creds["host"],
+            port=creds["port"],
+        ):
+            return self._err("Unknown database.")
 
-        self.dbf.from_schema(creds_schema)
         self.dbf.connect()
-        return self._ok("Reconnected successfully.")
+        return self._ok(self.dbf.to_dict())
 
     def _handle_list_connections(self, _=None) -> dict:
-        creds = self.configs.list_creds()
+        creds = self.configs_db.list_creds()
         return self._ok(creds)
 
     def _handle_delete_connection(self, body: dict) -> dict:
@@ -119,7 +131,7 @@ class Runner:
         if name is None or host is None or port is None or user is None:
             return self._err("Requires name, host and port to delete connection")
 
-        self.configs.delete_cred(name=name, host=host, port=port, user=user)
+        self.configs_db.delete_cred(name=name, host=host, port=port, user=user)
         return self._ok("Connection deleted successfully.")
 
     def _handle_disconnect(self, _=None) -> dict:
@@ -163,7 +175,9 @@ class Runner:
         return self._ok(metadata.model_dump())
 
     def _handle_verify_spec(self, body: dict) -> dict:
-        result = self.populator.resolve_specifications(self.dbf, TableSpec(**body))
+        spec = TableSpec(**body)
+        result = self.populator.resolve_specifications(self.dbf, spec)
+        self.configs_db.save_specs(spec)
         return self._ok(result.model_dump())
 
     def _handle_run_sql(self, body: dict) -> dict:

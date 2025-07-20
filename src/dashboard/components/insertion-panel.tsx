@@ -27,7 +27,7 @@ import {
   ColumnSpec,
   ColumnSpecMap,
   DataPackage,
-  DbData,
+  DBCreds,
   TableMetadata,
   TablePacket,
   TableSpec,
@@ -36,13 +36,13 @@ import {
 } from "@/components/types"
 
 interface InsertionPanelProps {
-  dbData: DbData | null
+  dbCreds: DBCreds | null
   activeTable: string | null
   setActiveTable: (activeTable: string | null) => void
 }
 
 export default function InsertionPanel({
-  dbData,
+  dbCreds,
   activeTable,
   setActiveTable,
 }: InsertionPanelProps) {
@@ -104,7 +104,7 @@ export default function InsertionPanel({
       left: 0,
       behavior: "auto",
     })
-  }, [activeTable, dbData])
+  }, [activeTable, dbCreds])
 
   useEffect(() => {
     if (activeTab === "preview" && (!tablePackets || pendingRefresh)) {
@@ -114,7 +114,7 @@ export default function InsertionPanel({
   }, [activeTab])
 
   async function fetchActiveTableData() {
-    if (!dbData || !dbData.connected || !activeTable) {
+    if (!dbCreds || !dbCreds.id || !activeTable) {
       setTableData(null)
       return
     }

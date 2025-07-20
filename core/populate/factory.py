@@ -21,6 +21,7 @@ from sqlalchemy.engine import Engine, Inspector
 from sqlalchemy.engine.reflection import Inspector
 
 from core.helpers import cap_string, cap_numeric
+from core.populate.config import ConfigDatabase
 from core.utils.decorators import requires
 from core.utils.exceptions import MissingRequiredAttributeError, VerificationError
 from core.utils.types import GeneratorType as GType
@@ -34,27 +35,21 @@ from core.utils.types import (
 
 
 class DatabaseFactory:
-    def __init__(
-        self,
-        host: str = "",
-        user: str = "",
-        port: str = "",
-        name: str = "",
-        password: str = "",
-    ):
-        self.host = host
-        self.user = user
-        self.port = port
-        self.name = name
-        self.password = password
+    def __init__(self):
+        self.id = None
+        self.host = ""
+        self.user = ""
+        self.port = ""
+        self.name = ""
+        self.password = ""
 
     def to_dict(self) -> dict:
         return {
+            "id": self.id,
             "host": self.host,
             "user": self.user,
             "port": self.port,
             "name": self.name,
-            "connected": self.connected,
         }
 
     def from_dict(self, data: dict):
@@ -65,12 +60,12 @@ class DatabaseFactory:
 
     def to_schema(self) -> DbCredsSchema:
         return DbCredsSchema(
+            id=self.id,
             name=self.name,
             host=self.host,
             port=self.port,
             user=self.user,
             password=self.password,
-            connected=self.connected,
         )
 
     def from_schema(self, schema: DbCredsSchema) -> None:
@@ -98,10 +93,6 @@ class DatabaseFactory:
     @property
     def inspector(self) -> Inspector:
         return inspect(self._engine)
-
-    @property
-    def connected(self) -> bool:
-        return getattr(self, "_connected", False)
 
     def setup_logging(self, log_path: str = "sqlalchemy.log"):
         logger = logging.getLogger("sqlalchemy")
@@ -149,44 +140,38 @@ class DatabaseFactory:
             raise Exception(f"Unsupported engine: {engine}")
         return self._url
 
-    def clear_url(self):
-        self._url = ""
-        self._connected = False
-
-        if hasattr(self, "_engine"):
-            del self._engine
-
     @requires("host", "user", "port", "name", "password")
-    def save(self, path: str):
-        creds = {
-            "db_host": self.host,
-            "db_user": self.user,
-            "db_port": self.port,
-            "db_password": self.password,
-            "db_name": self.name,
-        }
-        with open(path, "w") as f:
-            json.dump(creds, f, indent=4)
+    def save(self, configs_db: ConfigDatabase):
+        configs_db.save_cred(
+            DbCredsSchema(
+                name=self.name,
+                host=self.host,
+                port=self.port,
+                password=self.password,
+                user=self.user,
+            )
+        )
 
-    def load(self, path: str, fail_silently: bool = True):
-        if os.path.exists(path):
-            with open(path, "r") as f:
-                creds = json.load(f)
-                self.host = creds.get("db_host", "")
-                self.user = creds.get("db_user", "")
-                self.port = creds.get("db_port", "")
-                self.password = creds.get("db_password", "")
-                self.name = creds.get("db_name", "")
+    def load(
+        self, configs_db: ConfigDatabase, name: str, host: str, port: str, user: str
+    ) -> bool:
+        creds = configs_db.load_cred(name=name, host=host, port=port, user=user)
+        if creds:
+            self.id = creds.id
+            self.host = creds.host
+            self.user = creds.user
+            self.port = creds.port
+            self.password = creds.password
+            self.name = creds.name
+            return True
         else:
-            if not fail_silently:
-                raise FileNotFoundError(f"Credentials file '{path}' not found.")
+            return False
 
     @requires("host", "user", "port", "name", "password")
     def connect(self) -> bool:
         self.create_url()
         self.create_engine()
         self.test_connection()
-        self._connected = True
         return True
 
     @requires("url")
@@ -506,7 +491,9 @@ class GeneratorFactory:
     def make_computed(self, context: ContextFactory) -> list[str]:
         return ["[expr]" for _ in range(context.n)]
 
-    def _sample_values(self, n: int, gen_fn: Callable, col: ColumnMetadata) -> list[str]:
+    def _sample_values(
+        self, n: int, gen_fn: Callable, col: ColumnMetadata
+    ) -> list[str]:
         overshoot = math.ceil(n * 1.5)
         rows = []
         for _ in range(overshoot):

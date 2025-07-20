@@ -10,18 +10,11 @@ export type CliRequest<T> = Record<string, unknown> & {
 }
 
 export interface DBCreds {
-  name: string
-  host: string
-  port: string
-  user: string
-}
-
-export interface DbData {
+  id?: number
   host: string
   user: string
   port: string
   name: string
-  connected?: boolean
   password?: string
   error?: string
 }

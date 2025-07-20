@@ -3,7 +3,7 @@ import camelcaseKeys from "camelcase-keys"
 import { clsx, type ClassValue } from "clsx"
 import { twMerge } from "tailwind-merge"
 
-import { CliRequest, CliResponse, DbData } from "@/components/types"
+import { CliRequest, CliResponse, DBCreds } from "@/components/types"
 
 export async function invokeCliRequest(req: CliRequest<any>): Promise<string> {
   return invoke<string>("send", {

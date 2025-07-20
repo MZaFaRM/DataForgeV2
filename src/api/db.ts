@@ -1,13 +1,13 @@
-import { DBCreds, DbData, TableEntry, TableMetadata } from "@/components/types"
+import { DBCreds, TableEntry, TableMetadata } from "@/components/types"
 
 import { invokeAndExtract } from "./cli"
 
 export function invokeDbInfo() {
-  return invokeAndExtract<void, DbData>({ kind: "info" })
+  return invokeAndExtract<void, DBCreds>({ kind: "info" })
 }
 
-export function invokeDbConnection(dbCreds: DbData) {
-  return invokeAndExtract<DbData, boolean>({ kind: "connect", body: dbCreds })
+export function invokeDbConnection(dbCreds: DBCreds) {
+  return invokeAndExtract<DBCreds, DBCreds>({ kind: "connect", body: dbCreds })
 }
 
 export function invokeDbDisconnect() {
@@ -26,7 +26,7 @@ export function invokeDbDeletion(dbCreds: DBCreds) {
 }
 
 export function invokeDbReconnection(dbCreds: DBCreds) {
-  return invokeAndExtract<DBCreds, DbData>({
+  return invokeAndExtract<DBCreds, DBCreds>({
     kind: "reconnect",
     body: dbCreds,
   })

@@ -3,7 +3,7 @@ import { invokeGetTables } from "@/api/db"
 import { Icon } from "@iconify/react"
 
 import { Input } from "@/components/ui/input"
-import { DbData, TableEntry } from "@/components/types"
+import { DBCreds, TableEntry } from "@/components/types"
 
 interface TableCardProps {
   name: string
@@ -64,13 +64,13 @@ const TableCard = forwardRef<HTMLDivElement, TableCardProps>(
 )
 
 interface ListTablesProps {
-  dbData: DbData | null
+  dbCreds: DBCreds | null
   activeTable: string | null
   setActiveTable: (activeTable: string | null) => void
 }
 
 export default function ListTables({
-  dbData,
+  dbCreds,
   activeTable,
   setActiveTable,
 }: ListTablesProps) {
@@ -97,16 +97,16 @@ export default function ListTables({
   }, [])
 
   useEffect(() => {
-    if (!dbData) {
+    if (!dbCreds) {
       setTableEntries(null)
       setActiveTable(null)
     } else {
       fetchTables()
     }
-  }, [dbData])
+  }, [dbCreds])
 
   function fetchTables() {
-    if (!dbData) {
+    if (!dbCreds) {
       setTableEntries(null)
       return
     }

@@ -76,11 +76,10 @@ class TablePacket(BaseModel):
 
 
 class DbCredsSchema(BaseModel):
+    id: Optional[int] = None
     name: str
     host: str
     port: str
     user: str
     password: str
-    connected: bool = False
-
     model_config = {"from_attributes": True}

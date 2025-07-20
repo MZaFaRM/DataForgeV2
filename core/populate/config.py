@@ -5,10 +5,10 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 
 from core.utils.models import Base, DbCreds, db_path
-from core.utils.types import DbCredsSchema
+from core.utils.types import DbCredsSchema, TableSpec
 
 
-class ConfigHandler:
+class ConfigDatabase:
     def __init__(self):
         os.makedirs(os.path.dirname(db_path), exist_ok=True)
         self.engine = create_engine(f"sqlite:///{db_path}", echo=False)
@@ -17,7 +17,7 @@ class ConfigHandler:
 
     def save_cred(self, cred: DbCredsSchema):
         with self.Session() as session:
-            db_cred = DbCreds(**cred.model_dump(exclude={"connected"}))
+            db_cred = DbCreds(**cred.model_dump())
             session.merge(db_cred)
             session.commit()
 
@@ -32,10 +32,11 @@ class ConfigHandler:
             )
             return DbCredsSchema.model_validate(row) if row else None
 
-    def list_creds(self) -> list[dict[str, str]]:
+    def list_creds(self) -> list[dict[str, str | int]]:
         with self.Session() as session:
             rows = (
                 session.query(
+                    DbCreds.id,
                     DbCreds.name,
                     DbCreds.host,
                     DbCreds.port,
@@ -46,8 +47,8 @@ class ConfigHandler:
             )
 
             return [
-                {"name": name, "host": host, "port": port, "user": user}
-                for name, host, port, user in rows
+                {"id": id, "name": name, "host": host, "port": port, "user": user}
+                for id, name, host, port, user in rows
             ]
 
     def delete_cred(self, name: str, host: str, port: str, user: str):
@@ -60,3 +61,6 @@ class ConfigHandler:
             if row:
                 session.delete(row)
                 session.commit()
+
+    def save_specs(self, spec: TableSpec):
+        pass

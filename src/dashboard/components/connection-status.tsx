@@ -72,7 +72,7 @@ export default function ConnectionSelector({
 
   useEffect(() => {
     handleListDbCreds()
-    handleDbCreds()
+    handleSavedDbCreds()
   }, [])
 
   function handleErrorField(error: string) {
@@ -97,12 +97,13 @@ export default function ConnectionSelector({
     return error
   }
 
-  function handleDbCreds() {
+  function handleSavedDbCreds() {
     setDbConnecting(true)
     invokeDbInfo()
       .then((payload) => {
         if (payload && payload.id) {
-          setDbCreds({ ...payload })
+          handleListDbCreds()
+          setDbCreds(payload)
         }
       })
       .catch((error) => {
@@ -157,7 +158,7 @@ export default function ConnectionSelector({
           error: handleErrorField(error?.message || String(error)),
         }))
       })
-    handleDbCreds()
+    handleSavedDbCreds()
   }
 
   function handleDbCredsRemove(creds: DBCreds) {
@@ -184,7 +185,6 @@ export default function ConnectionSelector({
       .then((res) => {
         console.log("Connected to the database:", res)
         if (res) {
-          handleDbCreds()
           handleListDbCreds()
           setDbCreds(res)
 
@@ -272,7 +272,7 @@ export default function ConnectionSelector({
               <CommandEmpty>No DB found.</CommandEmpty>
               <CommandSeparator />
               <CommandGroup heading="Actions">
-                <CommandItem onSelect={handleDbCreds}>
+                <CommandItem onSelect={handleSavedDbCreds}>
                   <Icon
                     icon="mdi:refresh"
                     className={cn(

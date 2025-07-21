@@ -74,6 +74,7 @@ export default function InsertionPanel({
   const [tableSpecs, setTableSpecs] = useState<TableSpecEntry | null>(null)
   const [tablePacket, setTablePacket] = useState<TablePacket | null>(null)
   const [pendingWrites, setPendingWrites] = useState<number>(0)
+  const [needsRefresh, setNeedsRefresh] = useState<boolean>(false)
 
   useEffect(() => {
     getTimeOfDay()
@@ -81,6 +82,16 @@ export default function InsertionPanel({
     window.addEventListener("resize", updateSize)
     return () => window.removeEventListener("resize", updateSize)
   }, [])
+
+  useEffect(() => {
+    if (needsRefresh && activeTab == "preview") {
+      handleVerifyTableSpec()
+    }
+  }, [needsRefresh])
+
+  useEffect(() => {
+    setNeedsRefresh(true)
+  }, [tableSpecs])
 
   useEffect(() => {
     setActiveTab("insert")

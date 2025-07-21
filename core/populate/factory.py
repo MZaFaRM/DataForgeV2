@@ -55,7 +55,7 @@ class DatabaseFactory:
                 "Already connected to a database. Please create a new instance."
             )
 
-        for key in ["host", "user", "port", "name", "password"]:
+        for key in ["id", "host", "user", "port", "name", "password"]:
             if key not in data:
                 raise ValueError(f"Missing required key: {key}")
             setattr(self, key, str(data[key]))
@@ -76,7 +76,7 @@ class DatabaseFactory:
                 "Already connected to a database. Please create a new instance."
             )
 
-        for key in ["host", "user", "port", "name", "password"]:
+        for key in ["id", "host", "user", "port", "name", "password"]:
             if not hasattr(schema, key):
                 raise ValueError(f"Missing required key: {key}")
             setattr(self, key, str(getattr(schema, key, None)))
@@ -107,23 +107,24 @@ class DatabaseFactory:
     def connection(self) -> Connection:
         if not hasattr(self, "_connection"):
             self._connection = self.engine.connect()
-            self.transaction
         return self._connection
 
-    @property
-    def transaction(self) -> RootTransaction:
-        if not hasattr(self, "_transaction") or not self._transaction.is_active:
+    def ensure_transaction(self):
+        if not hasattr(self, "transaction") or self.transaction is None:
+            self.transaction = self.connection.begin()
             self.uncommitted = 0
-            self._transaction = self.connection.begin()
-        return self._transaction
 
     def commit(self):
         self.uncommitted = 0
-        self.transaction.commit()
+        if hasattr(self, "transaction") and not self.transaction is None:
+            self.transaction.commit()
+        self.transaction = None
 
     def rollback(self):
         self.uncommitted = 0
-        self.transaction.rollback()
+        if hasattr(self, "transaction") and not self.transaction is None:
+            self.transaction.rollback()
+        self.transaction = None
 
     def setup_logging(self):
         logger = logging.getLogger("sqlalchemy")
@@ -176,18 +177,11 @@ class DatabaseFactory:
         )
         self.id = pk
 
-    def load(self, name: str, host: str, port: str, user: str) -> bool:
+    def exists(
+        self, name: str, host: str, port: str, user: str
+    ) -> DbCredsSchema | None:
         creds = self.registry.load_cred(name=name, host=host, port=port, user=user)
-        if creds:
-            self.id = creds.id
-            self.host = creds.host
-            self.user = creds.user
-            self.port = creds.port
-            self.password = creds.password
-            self.name = creds.name
-            return True
-        else:
-            return False
+        return creds
 
     def test_connection(self) -> bool:
         with self.engine.connect() as connection:
@@ -394,6 +388,7 @@ class DatabaseFactory:
             VALUES ({', '.join([f':{col}' for col in packet.columns])})
         """
 
+        self.ensure_transaction()
         self.connection.execute(sql_text(sql), entries)
         self.uncommitted += 1
 

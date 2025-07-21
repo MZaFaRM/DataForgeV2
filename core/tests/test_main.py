@@ -43,12 +43,12 @@ def test_handle_connect_missing_params(runner: Runner):
     assert "Missing required connection" in res["error"]
 
 
-# def test_connect_success(runner: Runner):
-#     creds = TEST_CREDS.copy()
-#     creds["password"] = "1234567890"
-#     req = Request(kind="connect", body=creds)
-#     res = runner.handle_command(req)
-#     assert res["status"] == "ok", res["error"]
+def test_connect_success(runner: Runner):
+    creds = TEST_CREDS.copy()
+    creds["password"] = "1234567890"
+    req = Request(kind="connect", body=creds)
+    res = runner.handle_command(req)
+    assert res["status"] == "ok", res["error"]
 
 
 def test_run_sql_create_insert_select(runner: Runner):
@@ -154,26 +154,42 @@ def test_empty_verify_spec(runner: Runner):
     assert response["status"] == "ok", f"Load spec failed: {response['error']}"
     assert len(response["payload"]["entries"]) == 0, response["payload"]
 
+
 def test_verify_teachers_table_spec(runner: Runner):
     req = Request(kind="reconnect", body=TEST_CREDS)
     res = runner.handle_command(req)
     assert res["status"] == "ok", res["error"]
-    
+
     body = {
         "name": "teachers",
         "noOfEntries": 50,
         "columns": [
-            {"name": "teacher_id", "generator": "autoincrement", "type": "autoincrement"},
+            {
+                "name": "teacher_id",
+                "generator": "autoincrement",
+                "type": "autoincrement",
+            },
             {"name": "full_name", "generator": "name", "type": "faker"},
-            {"name": "department", "generator": "^(CS|MECH|CIVIL|IT)$", "type": "regex"},
-            {"name": "salary", "generator": "# import builtins + faker\n# Py fields run after faker/foreign/regex/etc\nimport random\n@order(1)\ndef generator(columns):\n\treturn random.randint(30_000, 60_000)", "type": "python"},
+            {
+                "name": "department",
+                "generator": "^(CS|MECH|CIVIL|IT)$",
+                "type": "regex",
+            },
+            {
+                "name": "salary",
+                "generator": "# import builtins + faker\n# Py fields run after faker/foreign/regex/etc\nimport random\n@order(1)\ndef generator(columns):\n\treturn random.randint(30_000, 60_000)",
+                "type": "python",
+            },
         ],
     }
 
     response = runner.handle_command(Request(kind="verify_spec", body=body))
     assert response["status"] == "ok", f"Load spec failed: {response['error']}"
     assert len(response["payload"]["errors"]) == 0, response["payload"]["errors"]
-    assert len(response["payload"]["entries"][0]) == len(body["columns"]), response["payload"]["entries"]
+    assert len(response["payload"]["entries"][0]) == len(body["columns"]), response[
+        "payload"
+    ]["entries"]
+
 
 def test_uncommitted(runner: Runner):
     req = Request(kind="reconnect", body=TEST_CREDS)
@@ -196,10 +212,45 @@ def test_uncommitted(runner: Runner):
         assert insert_res["status"] == "ok", insert_res["error"]
         assert insert_res["payload"]["pending_writes"] == i
 
-    # Step 4: Commit and check uncommitted is 0
     commit_res = runner.handle_command(Request(kind="set_rollback_db", body={}))
     assert commit_res["status"] == "ok", commit_res["error"]
     assert runner.dbf.uncommitted == 0
+
+
+def test_commit_and_rollback(runner: Runner):
+    req = Request(kind="reconnect", body=TEST_CREDS)
+    res = runner.handle_command(req)
+    assert res["status"] == "ok", res["error"]
+
+    body = {"dbId": 1, "tableName": "teachers"}
+    response = runner.handle_command(Request(kind="load_spec", body=body))
+    assert response["status"] == "ok", f"Load spec failed: {response['error']}"
+
+    load_res = runner.handle_command(
+        Request(kind="verify_spec", body=response["payload"])
+    )
+    assert load_res["status"] == "ok", load_res["error"]
+
+    insert_res = runner.handle_command(
+        Request(kind="insert_packet", body=load_res["payload"])
+    )
+    assert insert_res["status"] == "ok", insert_res["error"]
+
+    commit_res = runner.handle_command(Request(kind="set_rollback_db", body={}))
+    assert commit_res["status"] == "ok", commit_res["error"]
+
+    insert_res = runner.handle_command(
+        Request(kind="insert_packet", body=load_res["payload"])
+    )
+    assert insert_res["status"] == "ok", insert_res["error"]
+
+    commit_res = runner.handle_command(Request(kind="set_commit_db", body={}))
+    assert commit_res["status"] == "ok", commit_res["error"]
+
+    runner.handle_command(
+        Request(kind="run_sql", body={"sql": "DELETE FROM teachers LIMIT 50;"})
+    )
+    assert commit_res["status"] == "ok", commit_res["error"]
 
 
 # def test_insert_packet(runner: Runner):

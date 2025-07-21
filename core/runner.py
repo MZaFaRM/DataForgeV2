@@ -102,17 +102,21 @@ class Runner:
             )
             return self._err(msg)
 
-        if not self.dbf.load(
+        self.dbf = DatabaseFactory()
+        if schema := self.dbf.exists(
             name=creds["name"],
             user=creds["user"],
             host=creds["host"],
             port=creds["port"],
         ):
+            self.dbf = DatabaseFactory()
+            self.dbf.from_schema(schema)
+            self.dbf.test_connection()
+        else:
+            self.dbf = DatabaseFactory()
             self.dbf.from_dict(creds)
             self.dbf.test_connection()
             self.dbf.save()
-        else:
-            return self._err("Database credentials already saved, try reconnecting.")
 
         return self._ok(self.dbf.to_dict())
 
@@ -126,16 +130,18 @@ class Runner:
         if None in (name, host, port, user):
             return self._err("Requires name, host and port to reconnect")
 
-        if not self.dbf.load(
+        if schema := self.dbf.exists(
             name=creds["name"],
             user=creds["user"],
             host=creds["host"],
             port=creds["port"],
         ):
-            return self._err("Unknown database.")
+            self.dbf = DatabaseFactory()
+            self.dbf.from_schema(schema)
+            self.dbf.test_connection()
+            return self._ok(self.dbf.to_dict())
 
-        self.dbf.test_connection()
-        return self._ok(self.dbf.to_dict())
+        return self._err("Unknown database.")
 
     def _handle_list_connections(self, _=None) -> dict:
         creds = [cred.model_dump() for cred in self.dbf.registry.list_creds()]

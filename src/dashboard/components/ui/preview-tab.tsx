@@ -1,5 +1,7 @@
 import { useEffect, useState } from "react"
+import { invokeInsertPacket } from "@/api/fill"
 import { Icon } from "@iconify/react"
+import { invoke } from "@tauri-apps/api/core"
 
 import { cn } from "@/lib/utils"
 import {
@@ -25,28 +27,56 @@ import { toast } from "@/components/ui/use-toast"
 import { ErrorPacketMap, TableMetadata, TablePacket } from "@/components/types"
 
 interface RenderPreviewProps {
-  tablePackets: TablePacket | null
-  doRefresh: () => void
+  tablePacket: TablePacket | null
+  onRefresh: () => void
+  pendingWrites: number
+  setPendingWrites: (n: number) => void
   noOfRows: number
   setNoOfRows: (rows: number) => void
 }
 
 export default function RenderPreview({
-  tablePackets,
-  doRefresh,
+  tablePacket,
+  onRefresh,
   noOfRows,
+  pendingWrites,
+  setPendingWrites,
   setNoOfRows,
 }: RenderPreviewProps) {
   const [dice, setDice] = useState<number>(1)
   const [errorCols, setErrorCols] = useState<Record<string, string>>({})
   const [warnCols, setWarningCols] = useState<Record<string, string>>({})
 
+  function handleInsertPacket() {
+    if (!tablePacket) return
+    invokeInsertPacket(tablePacket)
+      .then((res) => {
+        toast({
+          variant: "success",
+          title: "Data inserted successfully!",
+          description: `Inserted ${tablePacket.entries.length} rows into ${tablePacket.name}`,
+        })
+        setPendingWrites(res.pendingWrites)
+      })
+      .catch((err) => {
+        toast({
+          variant: "destructive",
+          title: "Error inserting data",
+          description: err.message || "Unknown error occurred",
+        })
+      })
+  }
+
   useEffect(() => {
-    if (tablePackets) {
+    onRefresh()
+  }, [pendingWrites])
+
+  useEffect(() => {
+    if (tablePacket) {
       const errCol: Record<string, string> = {}
       const warnCol: Record<string, string> = {}
 
-      tablePackets.errors.forEach((error) => {
+      tablePacket.errors.forEach((error) => {
         if (error.column) {
           if (error.type == "error") {
             errCol[error.column] = error.msg ?? "Unknown"
@@ -82,7 +112,7 @@ export default function RenderPreview({
         })
       }
     }
-  }, [tablePackets])
+  }, [tablePacket])
 
   function shuffleDice() {
     const MaxRolls = 5
@@ -102,8 +132,8 @@ export default function RenderPreview({
       <Table className="flex-shrink-0">
         <TableHeader>
           <TableRow>
-            {tablePackets &&
-              tablePackets.columns.map((column) => (
+            {tablePacket &&
+              tablePacket.columns.map((column) => (
                 <TableHead
                   title={
                     (errorCols && errorCols[column]) ||
@@ -122,13 +152,13 @@ export default function RenderPreview({
           </TableRow>
         </TableHeader>
         <TableBody>
-          {tablePackets &&
+          {tablePacket &&
             (() => {
-              const columns = tablePackets.columns ?? []
-              const entries = tablePackets.entries ?? []
+              const columns = tablePacket.columns ?? []
+              const entries = tablePacket.entries ?? []
               const rowCount = entries.length ?? 0
               const colCount = entries[0]?.length || 0
-              const name = tablePackets.name
+              const name = tablePacket.name
 
               return Array.from({ length: rowCount }).map((_, rowIndex) => (
                 <TableRow key={`${name}.${rowIndex}`}>
@@ -161,7 +191,7 @@ export default function RenderPreview({
           className="inline-flex items-center space-x-2 rounded-md border px-3 py-2 text-sm font-medium hover:bg-accent hover:text-accent-foreground"
           onClick={() => {
             shuffleDice()
-            doRefresh()
+            onRefresh()
           }}
         >
           {Array.from({ length: 7 }).map((_, i) => (
@@ -177,7 +207,7 @@ export default function RenderPreview({
           <span>Refresh</span>
         </button>
         <div>
-          <Popover onOpenChange={(open) => !open && doRefresh()}>
+          <Popover onOpenChange={(open) => !open && onRefresh()}>
             <PopoverTrigger asChild>
               <div
                 className={cn(
@@ -188,7 +218,7 @@ export default function RenderPreview({
               >
                 <Icon
                   icon="material-symbols:add-row-below"
-                  className={cn("h-4 w-4 text-white")}
+                  className={cn("h-4 w-4 text-foreground")}
                 />
                 <span>{noOfRows} Rows</span>
               </div>
@@ -207,11 +237,8 @@ export default function RenderPreview({
           </Popover>
         </div>
         <div className="ml-auto inline-flex overflow-hidden rounded-md border bg-green-500 text-white">
-          {/* Primary Save button */}
           <button
-            onClick={() => {
-              console.log("Primary Save action - Insert to DB")
-            }}
+            onClick={handleInsertPacket}
             className={cn(
               "flex w-[145px] items-center px-3 py-2 text-sm font-medium hover:bg-green-600"
             )}

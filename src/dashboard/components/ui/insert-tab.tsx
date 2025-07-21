@@ -30,10 +30,72 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select"
-import { TableCell, TableRow } from "@/components/ui/table"
-import { ColumnData, ColumnSpec, GeneratorType } from "@/components/types"
+import { Table, TableBody, TableCell, TableRow } from "@/components/ui/table"
+import {
+  ColumnData,
+  ColumnSpec,
+  GeneratorType,
+  TableMetadata,
+  TableSpecEntry,
+  TableSpecMap,
+} from "@/components/types"
+import { invokeGetFakerMethods } from "@/api/fill"
 
 interface InsertTabProps {
+  tableData: TableMetadata
+  tableSpecs: TableSpecEntry | null
+  setTableSpecs: (data: SetStateAction<TableSpecEntry | null>) => void
+}
+
+export default function InsertTab({
+  tableData,
+  tableSpecs,
+  setTableSpecs,
+}: InsertTabProps) {
+  const [fakerMethods, setFakerMethods] = useState<string[]>([])
+  const [hoveredGroup, setHoveredGroup] = useState<string[] | null>(null)
+
+  useEffect(() => {
+    invokeGetFakerMethods()
+      .then((methods) => {
+        setFakerMethods(methods)
+      })
+      .catch((error) => {
+        console.error("Error fetching faker methods:", error)
+      })
+  }, [])
+
+  return (
+    <Table>
+      <TableBody>
+        {tableData.columns.map((column) => (
+          <InsertTabRows
+            key={`${tableData.name}-${column.name}`}
+            column={column}
+            columnSpec={(tableSpecs?.columns[column.name] as ColumnSpec) ?? {}}
+            setColumnSpec={(newSpec) =>
+              setTableSpecs((prev) => {
+                if (!prev) return prev
+                return {
+                  ...prev,
+                  columns: {
+                    ...prev?.columns,
+                    [column.name]: newSpec,
+                  },
+                }
+              })
+            }
+            fakerMethods={fakerMethods}
+            hoveredGroup={hoveredGroup}
+            setHoveredGroup={setHoveredGroup}
+          />
+        ))}
+      </TableBody>
+    </Table>
+  )
+}
+
+interface InsertTabRowsProps {
   column: ColumnData
   columnSpec: ColumnSpec
   setColumnSpec: (newSpec: ColumnSpec) => void
@@ -42,17 +104,16 @@ interface InsertTabProps {
   setHoveredGroup: (group: string[] | null) => void
 }
 
-export default function InsertTab({
+function InsertTabRows({
   column,
   columnSpec,
   setColumnSpec,
   fakerMethods,
   hoveredGroup,
   setHoveredGroup,
-}: InsertTabProps) {
+}: InsertTabRowsProps) {
   const thisGroup = column.multiUnique || column.unique ? [column.name] : []
   const inHovered = hoveredGroup?.includes(column.name)
-
 
   return (
     <TableRow
@@ -259,7 +320,7 @@ function RenderGenerator({
           <div
             className={cn(
               "flex items-center",
-              selected ? "text-white" : "text-muted-foreground"
+              selected ? "text-foreground" : "text-muted-foreground"
             )}
           >
             <Icon icon="mdi:collection" className="mr-2 h-4 w-4" />

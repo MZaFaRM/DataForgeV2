@@ -3,7 +3,7 @@ import { TablePacket, TableSpec } from "@/components/types"
 import { invokeAndExtract } from "./cli"
 
 export function invokeGetFakerMethods() {
-  return invokeAndExtract<void, string[]>({ kind: "faker_methods" })
+  return invokeAndExtract<void, string[]>({ kind: "get_faker_gen" })
 }
 
 export function invokeVerifySpec(tableSpec: TableSpec) {
@@ -24,7 +24,7 @@ export function invokeLoadSpec(dbId: number, tableName: string) {
 }
 
 export function invokeInsertPacket(packet: TablePacket) {
-  return invokeAndExtract<TablePacket, string>({
+  return invokeAndExtract<TablePacket, { pendingWrites: number }>({
     kind: "insert_packet",
     body: packet,
   })

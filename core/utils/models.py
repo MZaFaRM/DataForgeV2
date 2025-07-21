@@ -48,7 +48,7 @@ class TableSpecModel(Base):
     db_id = Column(Integer, ForeignKey("db_creds.id", ondelete="CASCADE"), nullable=False)
     name = Column(String(255), nullable=False)
     no_of_entries = Column(Integer, nullable=False)
-    columns = relationship("ColumnSpecModel", back_populates="table", cascade="all, delete-orphan")
+    columns = relationship("ColumnSpecModel", back_populates="table", cascade="all, delete-orphan", order_by="ColumnSpecModel.id")
 
     __tablename__ = "table_specs"
     __table_args__ = (UniqueConstraint("db_id", "name", name="uq_table_name_per_db"),)

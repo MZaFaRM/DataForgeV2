@@ -15,7 +15,7 @@ import networkx as nx
 import rstr
 from faker import Faker
 from networkx import Graph
-from sqlalchemy import create_engine, inspect
+from sqlalchemy import Connection, RootTransaction, create_engine, inspect
 from sqlalchemy import text as sql_text
 from sqlalchemy.engine import Engine, Inspector
 from sqlalchemy.engine.reflection import Inspector
@@ -27,6 +27,7 @@ from core.utils.exceptions import MissingRequiredAttributeError, VerificationErr
 from core.utils.types import ColumnMetadata, ColumnSpec, DbCredsSchema, ForeignKeyRef
 from core.utils.types import GeneratorType as GType
 from core.utils.types import TableMetadata, TablePacket
+from urllib.parse import quote_plus
 
 
 class DatabaseFactory:
@@ -84,7 +85,7 @@ class DatabaseFactory:
     def url(self) -> str:
         if not hasattr(self, "_url"):
             if self.user and self.password and self.host and self.port and self.name:
-                self._url = f"mysql+pymysql://{self.user}:{self.password}@{self.host}:{self.port}/{self.name}"
+                self._url = f"mysql+pymysql://{quote_plus(self.user)}:{quote_plus(self.password)}@{self.host}:{self.port}/{quote_plus(self.name)}"
             else:
                 raise MissingRequiredAttributeError(
                     "Required arguments for url: user, password, host, port and name not set."
@@ -94,8 +95,8 @@ class DatabaseFactory:
     @property
     def engine(self) -> Engine:
         if not hasattr(self, "_engine"):
-            self._engine = create_engine(self.url, echo=False)
             self.setup_logging()
+            self._engine = create_engine(self.url, echo=False)
         return self._engine
 
     @property
@@ -103,16 +104,26 @@ class DatabaseFactory:
         return inspect(self.engine)
 
     @property
-    def connection(self):
-        if not hasattr(self, "engine"):
-            raise MissingRequiredAttributeError(
-                "Engine is not initialized. Call 'create_engine' first."
-            )
-        return self.engine
+    def connection(self) -> Connection:
+        if not hasattr(self, "_connection"):
+            self._connection = self.engine.connect()
+            self.transaction
+        return self._connection
 
     @property
-    def transaction(self):
-        pass
+    def transaction(self) -> RootTransaction:
+        if not hasattr(self, "_transaction") or not self._transaction.is_active:
+            self.uncommitted = 0
+            self._transaction = self.connection.begin()
+        return self._transaction
+
+    def commit(self):
+        self.uncommitted = 0
+        self.transaction.commit()
+
+    def rollback(self):
+        self.uncommitted = 0
+        self.transaction.rollback()
 
     def setup_logging(self):
         logger = logging.getLogger("sqlalchemy")
@@ -371,20 +382,20 @@ class DatabaseFactory:
             logging.error(f"Error executing SQL: {e}")
             raise e
 
-    def insert_packet(self, packet: TablePacket, commit: bool = False):
+    def insert_packet(self, packet: TablePacket):
         table_name = packet.name
         if not packet.columns or not packet.entries:
             raise ValueError("Missing columns and/or entries.")
 
         entries = [dict(zip(packet.columns, entry)) for entry in packet.entries]
 
-        sql = f"INSERT INTO `{table_name}` ({', '.join(packet.columns)}) VALUES (:{', :'.join(packet.columns)});"
+        sql = f"""
+            INSERT INTO `{table_name}` ({', '.join(packet.columns)})
+            VALUES ({', '.join([f':{col}' for col in packet.columns])})
+        """
 
-        if not commit:
-            with self.engine.begin() as conn:
-                for entry in entries:
-                    conn.execute(sql_text(sql), entry)
-            return True
+        self.connection.execute(sql_text(sql), entries)
+        self.uncommitted += 1
 
 
 @dataclass

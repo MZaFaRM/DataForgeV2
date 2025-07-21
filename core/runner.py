@@ -84,10 +84,10 @@ class Runner:
     def _handle_ping(self, _=None) -> dict:
         return self._ok("pong")
 
-    def _handle_info(self, _=None) -> dict:
+    def _handle_get_info_db(self, _=None) -> dict:
         return self._ok(self.dbf.to_dict())
 
-    def _handle_faker_methods(self, _=None) -> dict:
+    def _handle_get_faker_gen(self, _=None) -> dict:
         return self._ok(self.populator.methods)
 
     def _handle_connect(self, creds: dict) -> dict:
@@ -239,7 +239,15 @@ class Runner:
         try:
             if not body:
                 return self._err("missing params: packet.")
-            self.dbf.insert_packet(TablePacket(**body), commit=False)
-            return self._ok("Packet inserted successfully.")
+            self.dbf.insert_packet(TablePacket(**body))
+            return self._ok({"pending_writes": self.dbf.uncommitted})
         except Exception as e:
             return self._err(f"Error inserting packet: {str(e)}")
+
+    def _handle_set_commit_db(self, _: dict) -> dict:
+        self.dbf.commit()
+        return self._ok("Committed all transactions successfully!")
+
+    def _handle_set_rollback_db(self, _: dict) -> dict:
+        self.dbf.rollback()
+        return self._ok("Rollbacked all transactions successfully!")

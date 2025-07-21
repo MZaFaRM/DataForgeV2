@@ -56,7 +56,7 @@ class Populator:
         metadata = dbf.get_table_metadata(table_spec.name)
         errors = []
         column_values: dict[str, list[str]] = {
-            col.name: [""] * table_spec.no_of_entries for col in table_spec.columns
+            col.name: [""] * table_spec.no_of_entries for col in ordered_columns
         }
 
         for col_spec in ordered_columns:

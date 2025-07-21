@@ -1,5 +1,10 @@
 import { act, useEffect, useRef, useState } from "react"
-import { invokeRunSql, invokeTableData } from "@/api/db"
+import {
+  invokeDbCommit,
+  invokeDbRollback,
+  invokeRunSql,
+  invokeTableData,
+} from "@/api/db"
 import {
   invokeGetFakerMethods,
   invokeLoadSpec,
@@ -12,6 +17,7 @@ import { sql } from "@codemirror/lang-sql"
 import { Icon } from "@iconify/react"
 import { githubDark, githubLight } from "@uiw/codemirror-theme-github"
 import CodeMirror, { EditorView } from "@uiw/react-codemirror"
+import { set } from "date-fns"
 import { ta } from "date-fns/locale"
 import { useTheme } from "next-themes"
 
@@ -39,6 +45,8 @@ import {
   TableSpecMap,
 } from "@/components/types"
 
+import SqlInsertionTab from "./ui/sql-tab"
+
 interface InsertionPanelProps {
   dbCreds: DBCreds | null
   activeTable: string | null
@@ -50,8 +58,6 @@ export default function InsertionPanel({
   activeTable,
   setActiveTable,
 }: InsertionPanelProps) {
-  const { theme } = useTheme()
-
   const ref = useRef<HTMLDivElement>(null)
   const insertTabRef = useRef<HTMLDivElement>(null)
   const previewTabRef = useRef<HTMLDivElement>(null)
@@ -63,26 +69,14 @@ export default function InsertionPanel({
     "sunrise" | "sunset" | "moonrise" | "moonset"
   >("sunrise")
   const [tableData, setTableData] = useState<TableMetadata | null>(null)
-  const [fakerMethods, setFakerMethods] = useState<string[]>([])
-  const [hoveredGroup, setHoveredGroup] = useState<string[] | null>(null)
   const [activeTab, setActiveTab] = useState<string>("insert")
   const [globalSpecs, setGlobalSpecs] = useState<TableSpecMap>({})
-  const [tableSpecs, setTableSpecs] = useState<TableSpecEntry | null>()
-  const [tablePackets, setTablePackets] = useState<TablePacket | null>(null)
-  const [pendingRefresh, setPendingRefresh] = useState(false)
-  const [sqlScript, setSqlScript] = useState<string>("")
+  const [tableSpecs, setTableSpecs] = useState<TableSpecEntry | null>(null)
+  const [tablePacket, setTablePacket] = useState<TablePacket | null>(null)
+  const [pendingWrites, setPendingWrites] = useState<number>(0)
 
   useEffect(() => {
     getTimeOfDay()
-
-    invokeGetFakerMethods()
-      .then((methods) => {
-        setFakerMethods(methods)
-      })
-      .catch((error) => {
-        console.error("Error fetching faker methods:", error)
-      })
-
     updateSize()
     window.addEventListener("resize", updateSize)
     return () => window.removeEventListener("resize", updateSize)
@@ -111,7 +105,7 @@ export default function InsertionPanel({
   }, [activeTable, dbCreds])
 
   useEffect(() => {
-    if (activeTab === "preview" && (!tablePackets || pendingRefresh)) {
+    if (activeTab === "preview" && !tablePacket) {
       handleVerifyTableSpec()
       return
     }
@@ -184,43 +178,6 @@ export default function InsertionPanel({
     setTableSpecs(ts)
   }
 
-  function runSql() {
-    if (!sqlScript || sqlScript.trim() === "") {
-      toast({
-        variant: "destructive",
-        title: "Empty SQL script",
-        description: "Please enter a valid SQL script to execute.",
-      })
-      return
-    }
-
-    invokeRunSql(sqlScript)
-      .then((success) => {
-        if (success) {
-          toast({
-            variant: "success",
-            title: "SQL executed successfully",
-          })
-          setPendingRefresh(true)
-          fetchActiveTableData()
-        } else {
-          toast({
-            variant: "destructive",
-            title: "SQL execution failed",
-            description: "Please check your SQL script for errors.",
-          })
-        }
-      })
-      .catch((error) => {
-        console.error("Error executing SQL:", error)
-        toast({
-          variant: "destructive",
-          title: "SQL execution error",
-          description: error.message,
-        })
-      })
-  }
-
   function updateSize() {
     if (ref.current) {
       const rect = ref.current.getBoundingClientRect()
@@ -244,7 +201,7 @@ export default function InsertionPanel({
     console.log("Verifying table spec:", tableSpec)
     invokeVerifySpec(tableSpec)
       .then((res) => {
-        setTablePackets(res)
+        setTablePacket(res)
       })
       .catch((error) => {
         console.error("Error verifying spec:", error)
@@ -338,7 +295,10 @@ export default function InsertionPanel({
                 </div>
               </div>
               <div>
-                <HandleTransaction />
+                <HandleTransaction
+                  pendingWrites={pendingWrites}
+                  setPendingWrites={setPendingWrites}
+                />
               </div>
             </div>
           )}
@@ -382,34 +342,11 @@ export default function InsertionPanel({
                   activeTab !== "insert" && "hidden"
                 )}
               >
-                <Table>
-                  <TableBody>
-                    {tableData.columns.map((column) => (
-                      <InsertTab
-                        key={`${tableData.name}-${column.name}`}
-                        column={column}
-                        columnSpec={
-                          (tableSpecs?.columns[column.name] as ColumnSpec) ?? {}
-                        }
-                        setColumnSpec={(newSpec) =>
-                          setTableSpecs((prev) => {
-                            if (!prev) return prev
-                            return {
-                              ...prev,
-                              columns: {
-                                ...prev?.columns,
-                                [column.name]: newSpec,
-                              },
-                            }
-                          })
-                        }
-                        fakerMethods={fakerMethods}
-                        hoveredGroup={hoveredGroup}
-                        setHoveredGroup={setHoveredGroup}
-                      />
-                    ))}
-                  </TableBody>
-                </Table>
+                <InsertTab
+                  tableData={tableData}
+                  tableSpecs={tableSpecs}
+                  setTableSpecs={(spec) => setTableSpecs(spec)}
+                />
               </div>
               <div
                 ref={previewTabRef}
@@ -419,9 +356,11 @@ export default function InsertionPanel({
                 )}
               >
                 <RenderPreview
-                  tablePackets={tablePackets}
-                  doRefresh={handleVerifyTableSpec}
+                  tablePacket={tablePacket}
+                  onRefresh={handleVerifyTableSpec}
                   noOfRows={tableSpecs?.noOfEntries}
+                  pendingWrites={pendingWrites}
+                  setPendingWrites={setPendingWrites}
                   setNoOfRows={(rows) =>
                     setTableSpecs((prev) => {
                       if (!prev) return prev
@@ -448,33 +387,7 @@ export default function InsertionPanel({
                   activeTab !== "sql" && "hidden"
                 )}
               >
-                <div className="flex-1 overflow-auto">
-                  <CodeMirror
-                    value={sqlScript || "\n".repeat(100)}
-                    onChange={(value) => setSqlScript(value)}
-                    placeholder={"-- SQL expression"}
-                    extensions={[sql(), EditorView.lineWrapping]}
-                    theme={theme === "light" ? githubLight : githubDark}
-                    className="h-full w-full"
-                    style={{ border: "none" }}
-                    basicSetup={{
-                      lineNumbers: false,
-                      foldGutter: false,
-                    }}
-                  />
-                </div>
-                <div className="absolute bottom-4 right-4 z-10 bg-inherit p-2 text-right">
-                  <button
-                    className={cn(
-                      "flex items-center rounded border px-4 py-2 text-sm font-medium",
-                      "text-green-500 hover:bg-green-600 hover:text-white"
-                    )}
-                    onClick={() => runSql()}
-                  >
-                    <Icon icon="lsicon:lightning-filled" className="mr-2" />
-                    Execute All
-                  </button>
-                </div>
+                <SqlInsertionTab onSuccess={fetchActiveTableData} />
               </div>
             </div>
           ) : (
@@ -518,28 +431,68 @@ function TabButton({
   )
 }
 
-function HandleTransaction() {
-  const [dataPackage, setDataPackage] = useState<DataPackage | null>(null)
-  const [openDropdown, setOpenDropdown] = useState(false)
-
+function HandleTransaction({
+  pendingWrites,
+  setPendingWrites,
+}: {
+  pendingWrites: number
+  setPendingWrites: (count: number) => void
+}) {
   useEffect(() => {
-    setDataPackage(() => {
-      return {
-        verified: true,
-        table: "user",
-        entries: [],
-        inserted: false,
-      }
-    })
-  }, [])
+    console.log("writes:", pendingWrites)
+  }, [pendingWrites])
+
+  function handleCommit() {
+    invokeDbCommit()
+      .then(() => {
+        toast({
+          title: "Commit Successful",
+          description: "Your changes have been committed to the database.",
+          variant: "success",
+        })
+        setPendingWrites(0)
+      })
+      .catch((error) => {
+        console.error("Commit failed:", error)
+        toast({
+          title: "Commit Failed",
+          description: "There was an error committing your changes.",
+          variant: "destructive",
+        })
+      })
+  }
+
+  function handleRollback() {
+    invokeDbRollback()
+      .then(() => {
+        toast({
+          title: "Rollback Successful",
+          description: "Your changes have been rolled back.",
+          variant: "success",
+        })
+        setPendingWrites(0)
+      })
+      .catch((error) => {
+        console.error("Rollback failed:", error)
+        toast({
+          title: "Rollback Failed",
+          description: "There was an error rolling back your changes.",
+          variant: "destructive",
+        })
+      })
+  }
 
   return (
     <div className="flex gap-2">
+      {pendingWrites > 0 && (
+        <div className="flex items-center space-x-2 px-3 py-2 text-sm font-medium text-muted-foreground">
+          <Icon icon="jam:alert" className="h-4 w-4 text-yellow-500" />
+          <p>{pendingWrites} Pending Writes</p>
+        </div>
+      )}
       <button
         className="inline-flex items-center space-x-2 rounded-md border px-3 py-2 text-sm font-medium hover:bg-accent hover:text-accent-foreground"
-        onClick={() => {
-          console.log("Commit triggered")
-        }}
+        onClick={handleCommit}
       >
         <Icon icon="ion:git-commit-sharp" className="h-4 w-4 text-violet-500" />
         <span>Commit</span>
@@ -547,9 +500,7 @@ function HandleTransaction() {
 
       <button
         className="inline-flex items-center space-x-2 rounded-md border px-3 py-2 text-sm font-medium hover:bg-accent hover:text-accent-foreground"
-        onClick={() => {
-          console.log("Rollback triggered")
-        }}
+        onClick={handleRollback}
       >
         <Icon
           icon="solar:rewind-back-bold-duotone"

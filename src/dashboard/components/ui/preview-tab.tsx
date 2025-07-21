@@ -78,10 +78,11 @@ export default function RenderPreview({
 
       tablePacket.errors.forEach((error) => {
         if (error.column) {
-          if (error.type == "error") {
-            errCol[error.column] = error.msg ?? "Unknown"
-          } else if (error.type == "warning") {
-            warnCol[error.column] = error.msg ?? "Unknown"
+          const msg = `${error.column}: ${error.msg ?? "Unknown"}`
+          if (error.type === "error") {
+            errCol[error.column] = msg
+          } else if (error.type === "warning") {
+            warnCol[error.column] = msg
           }
         }
       })

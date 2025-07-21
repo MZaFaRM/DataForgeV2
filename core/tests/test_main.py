@@ -141,18 +141,26 @@ def test_empty_verify_spec(runner: Runner):
     assert res["status"] == "ok", res["error"]
 
     body = {
-        "name": "teachers",
+        "name": "classes",
         "noOfEntries": 50,
         "columns": [
-            {"name": "teacher_id", "generator": None, "type": "faker"},
-            {"name": "full_name", "generator": None, "type": "regex"},
-            {"name": "department", "generator": None, "type": "foreign"},
-            {"name": "salary", "generator": None, "type": "python"},
+            {
+                "name": "class_id",
+                "generator": "autoincrement",
+                "type": "autoincrement",
+            },
+            {"name": "class_name", "generator": None, "type": "faker"},
+            {"name": "room_number", "generator": None, "type": "faker"},
+            {
+                "name": "teacher_id",
+                "generator": "teachers__teacher_id",
+                "type": "foreign",
+            },
         ],
     }
     response = runner.handle_command(Request(kind="verify_spec", body=body))
     assert response["status"] == "ok", f"Load spec failed: {response['error']}"
-    assert len(response["payload"]["entries"]) == 0, response["payload"]
+    assert len(response["payload"]["entries"][0]) == 2, response["payload"]
 
 
 def test_verify_teachers_table_spec(runner: Runner):

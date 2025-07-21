@@ -84,14 +84,15 @@ export default function InsertionPanel({
   }, [])
 
   useEffect(() => {
+    console.log(needsRefresh, activeTab)
     if (needsRefresh && activeTab == "preview") {
       handleVerifyTableSpec()
     }
-  }, [needsRefresh])
+  }, [activeTab])
 
   useEffect(() => {
     setNeedsRefresh(true)
-  }, [tableSpecs])
+  }, [tableSpecs, activeTable, dbCreds])
 
   useEffect(() => {
     setActiveTab("insert")
@@ -115,12 +116,6 @@ export default function InsertionPanel({
     })
   }, [activeTable, dbCreds])
 
-  useEffect(() => {
-    if (activeTab === "preview" && !tablePacket) {
-      handleVerifyTableSpec()
-      return
-    }
-  }, [activeTab])
 
   async function fetchActiveTableData() {
     if (!dbCreds || !dbCreds.id || !activeTable) {

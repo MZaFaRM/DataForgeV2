@@ -23,7 +23,11 @@ from sqlalchemy.engine.reflection import Inspector
 from core.helpers import cap_numeric, cap_string
 from core.populate.config import DBFRegistry
 from core.settings import LOG_PATH
-from core.utils.exceptions import MissingRequiredAttributeError, VerificationError
+from core.utils.exceptions import (
+    MissingRequiredAttributeError,
+    ValidationWarning,
+    VerificationError,
+)
 from core.utils.types import ColumnMetadata, ColumnSpec, DbCredsSchema, ForeignKeyRef
 from core.utils.types import GeneratorType as GType
 from core.utils.types import TableMetadata, TablePacket
@@ -480,11 +484,17 @@ class GeneratorFactory:
             raise ValueError(f"No foreign key reference for column {column.name}")
 
         if not f"{fk.table}.{fk.column}" in cache:
-            cache[f"{fk.table}.{fk.column}"] = dbf.get_existing_values(
-                fk.table, fk.column
-            )
+            cache[f"{fk.table}.{fk.column}"] = list(map(
+                str, dbf.get_existing_values(fk.table, fk.column)
+            ))
 
         rows = cache[f"{fk.table}.{fk.column}"]
+        if not rows:
+            msg = f"No foreign key rows to choose from for column {column.name}"
+            if context.column.nullable:
+                raise ValidationWarning(msg)
+            else:
+                raise ValueError(msg)
 
         return [random.choice(rows) for _ in range(context.n)]
 

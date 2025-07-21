@@ -71,8 +71,8 @@ class ErrorPacket(BaseModel):
 class TablePacket(BaseModel):
     name: str
     columns: list[str]
-    entries: list[list[str]]
-    errors: list[ErrorPacket]
+    entries: list[list[str | None]]
+    errors: list[ErrorPacket] = []
 
 
 class DbCredsSchema(BaseModel):
@@ -81,5 +81,5 @@ class DbCredsSchema(BaseModel):
     host: str
     port: str
     user: str
-    password: str
+    password: str = ""
     model_config = {"from_attributes": True}

@@ -18,7 +18,7 @@ from sqlalchemy.orm import declarative_base, relationship
 Base = declarative_base()
 
 # fmt: off
-class DbCreds(Base):
+class DbCredsModel(Base):
     id = Column(Integer, primary_key=True, autoincrement=True)
     name = Column(String, nullable=False)
     host = Column(String, nullable=False)

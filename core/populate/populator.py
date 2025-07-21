@@ -51,7 +51,7 @@ class Populator:
         dbf: DatabaseFactory,
         ordered_columns: list[ColumnSpec],
         table_spec: TableSpec,
-    ) -> tuple[list[ErrorPacket], list[list[str]]]:
+    ) -> tuple[list[ErrorPacket], list[list[str | None]]]:
 
         metadata = dbf.get_table_metadata(table_spec.name)
         errors = []
@@ -97,18 +97,6 @@ class Populator:
         # make the entries row major
         return errors, list(map(list, zip(*column_values.values())))
 
-        @property
-        def column(self) -> ColumnMetadata:
-            if self.table is None or self.col_spec is None:
-                raise ValueError("Table or column specification is missing.")
-            return self.table.get_column(self.col_spec.name)
-
-        @property
-        def cache(self) -> dict[str, Any]:
-            if not hasattr(self, "_cache"):
-                self._cache = {}
-            return self._cache
-
     # endregion
 
     # region helpers
@@ -134,7 +122,9 @@ class Populator:
         column = context.column
 
         for _ in range(max_attempts):
-            generated_rows: list[str] = self.tf.make(col_spec.type, context=context)
+            generated_rows: list[str | None] = self.tf.make(
+                col_spec.type, context=context
+            )
             generated_rows = self._filter_rows(context=context, rows=generated_rows)
 
             if len(generated_rows) >= rows:
@@ -189,16 +179,20 @@ class Populator:
         result = result + [spec for _, spec in sorted(result_python.items())]
         return errors, result
 
-    def _filter_rows(self, context: ContextFactory, rows: list[str]) -> list[str]:
+    def _filter_rows(
+        self, context: ContextFactory, rows: list[str | None]
+    ) -> list[str | None]:
         filtered_rows = rows
         table = context.table
         col_spec = context.col_spec
         cache = context.cache
         dbf = context.dbf
 
-        def satisfy_unique(rows: list[str]) -> list[str]:
+        def satisfy_unique(rows: list[str | None]) -> list[str | None]:
             seen = set()
-            unique_row = [row for row in rows if not (row in seen or seen.add(row))]
+            unique_row = [
+                row for row in rows if row is None or not (row in seen or seen.add(row))
+            ]
             cache_key = f"{table.name}.{col_spec.name}"
             if cache is not None:
                 if cache_key in cache:

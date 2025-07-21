@@ -7,7 +7,7 @@ import traceback
 from typing import Any
 
 from core.settings import LOG_PATH
-from core.utils.types import TableSpec
+from core.utils.types import TablePacket, TableSpec
 
 from core.populate.populator import Populator
 from core.populate.factory import DatabaseFactory
@@ -109,7 +109,7 @@ class Runner:
             port=creds["port"],
         ):
             self.dbf.from_dict(creds)
-            self.dbf.connect()
+            self.dbf.test_connection()
             self.dbf.save()
         else:
             return self._err("Database credentials already saved, try reconnecting.")
@@ -134,11 +134,11 @@ class Runner:
         ):
             return self._err("Unknown database.")
 
-        self.dbf.connect()
+        self.dbf.test_connection()
         return self._ok(self.dbf.to_dict())
 
     def _handle_list_connections(self, _=None) -> dict:
-        creds = self.dbf.registry.list_creds()
+        creds = [cred.model_dump() for cred in self.dbf.registry.list_creds()]
         return self._ok(creds)
 
     def _handle_delete_connection(self, body: dict) -> dict:
@@ -234,3 +234,12 @@ class Runner:
             return self._ok("Logs cleared successfully.")
         except Exception as e:
             return self._err(f"Failed to clear logs: {str(e)}")
+
+    def _handle_insert_packet(self, body: dict) -> dict:
+        try:
+            if not body:
+                return self._err("missing params: packet.")
+            self.dbf.insert_packet(TablePacket(**body), commit=False)
+            return self._ok("Packet inserted successfully.")
+        except Exception as e:
+            return self._err(f"Error inserting packet: {str(e)}")

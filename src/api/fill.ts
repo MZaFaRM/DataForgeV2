@@ -22,3 +22,10 @@ export function invokeLoadSpec(dbId: number, tableName: string) {
     },
   })
 }
+
+export function invokeInsertPacket(packet: TablePacket) {
+  return invokeAndExtract<TablePacket, string>({
+    kind: "insert_packet",
+    body: packet,
+  })
+}

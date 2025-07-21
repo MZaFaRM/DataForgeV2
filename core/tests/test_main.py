@@ -90,7 +90,7 @@ def test_list_connections(runner: Runner):
     assert res["status"] == "ok", "Error connecting to database"
 
     res = runner.handle_command(Request(kind="list_connections", body={}))
-    assert res["status"] == "ok", "Error listing connections"
+    assert res["status"] == "ok", res["error"]
     assert isinstance(res["payload"], list)
 
 
@@ -169,7 +169,73 @@ def test_load_spec(runner: Runner):
     req = Request(kind="reconnect", body=TEST_CREDS)
     res = runner.handle_command(req)
     assert res["status"] == "ok", res["error"]
-    
-    body = {"dbId":1,"tableName":"teachers"}
+
+    body = {"dbId": 1, "tableName": "teachers"}
     response = runner.handle_command(Request(kind="load_spec", body=body))
     assert response["status"] == "ok", f"Load spec failed: {response['error']}"
+
+
+# def test_insert_packet(runner: Runner):
+#     req = Request(kind="reconnect", body=TEST_CREDS)
+#     res = runner.handle_command(req)
+#     assert res["status"] == "ok", res["error"]
+
+#     body = {
+#         "name": "teachers",
+#         "columns": ["teacher_id", "full_name", "department", "salary"],
+#         "entries": [
+#             [None, "Gregory Lamb", "IT", "55100"],
+#             [None, "Robert Wells", "CS", "32133"],
+#             [None, "William Grant", "MECH", "35878"],
+#             [None, "Meagan Cline", "MECH", "42095"],
+#             [None, "Chase Coleman", "CS", "35753"],
+#             [None, "Yolanda West", "CS", "36990"],
+#             [None, "Jessica Parsons", "CIVIL", "54170"],
+#             [None, "Joshua Martinez", "IT", "30056"],
+#             [None, "Susan Gonzalez", "CIVIL", "39751"],
+#             [None, "Elizabeth Bowers", "CS", "38867"],
+#             [None, "Sharon Nguyen", "CIVIL", "51314"],
+#             [None, "Misty Ward", "IT", "44735"],
+#             [None, "Jon Vega", "CIVIL", "47897"],
+#             [None, "Rachel Scott", "IT", "54591"],
+#             [None, "Tina Noble", "MECH", "44018"],
+#             [None, "Pamela Wright", "MECH", "37111"],
+#             [None, "Dale Weiss", "IT", "44012"],
+#             [None, "John Mann", "CIVIL", "37298"],
+#             [None, "Craig Rodriguez", "CIVIL", "43242"],
+#             [None, "Gordon Wilson", "CS", "48078"],
+#             [None, "Carrie Perez", "CS", "44548"],
+#             [None, "Robert York", "IT", "51658"],
+#             [None, "Jeffrey Lozano", "MECH", "37311"],
+#             [None, "Marie Turner", "MECH", "52124"],
+#             [None, "Jonathan Holmes", "MECH", "43236"],
+#             [None, "Mary Lin", "MECH", "42055"],
+#             [None, "Jeremy Cole", "CS", "48148"],
+#             [None, "Richard Miller", "MECH", "52431"],
+#             [None, "Jamie Gregory", "IT", "35699"],
+#             [None, "John Tran", "CS", "46852"],
+#             [None, "Jennifer Walton", "CIVIL", "51372"],
+#             [None, "Chelsea Brown", "CIVIL", "44862"],
+#             [None, "Stephen Smith", "IT", "32604"],
+#             [None, "Anthony Graham", "CIVIL", "31340"],
+#             [None, "Jennifer Wilkins", "CS", "39162"],
+#             [None, "Rebecca Jenkins MD", "MECH", "38298"],
+#             [None, "Michael Miller", "IT", "59444"],
+#             [None, "Julia Peterson", "MECH", "48126"],
+#             [None, "Timothy Bauer", "CIVIL", "52236"],
+#             [None, "Laura Pierce", "CIVIL", "48196"],
+#             [None, "David Gibson", "IT", "30034"],
+#             [None, "Katherine Sanders", "CS", "35318"],
+#             [None, "Stacey Mcguire", "IT", "36849"],
+#             [None, "Alexis Hooper", "MECH", "43890"],
+#             [None, "Tina Lee", "MECH", "51536"],
+#             [None, "Donna Richard", "IT", "38350"],
+#             [None, "Elizabeth Armstrong", "IT", "40857"],
+#             [None, "Jay Price", "IT", "46078"],
+#             [None, "Jason Trujillo", "IT", "56435"],
+#             [None, "Jeffrey Burton", "IT", "58438"],
+#         ],
+#     }
+
+#     response = runner.handle_command(Request(kind="insert_packet", body=body))
+#     assert response["status"] == "ok", response["error"]

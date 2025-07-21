@@ -4,7 +4,7 @@ from typing import Optional
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 
-from core.utils.models import Base, ColumnSpecModel, DbCreds, TableSpecModel
+from core.utils.models import Base, ColumnSpecModel, DbCredsModel, TableSpecModel
 from core.utils.types import ColumnSpec, DbCredsSchema, TableSpec
 from core.settings import DB_PATH
 
@@ -17,47 +17,44 @@ class DBFRegistry:
 
     def save_cred(self, cred: DbCredsSchema):
         with self.Session() as session:
-            db_cred = DbCreds(**cred.model_dump())
+            db_cred = DbCredsModel(**cred.model_dump())
             session.add(db_cred)
             session.flush()
-            pk = int(db_cred.id)  # type: ignore
+            schema = DbCredsSchema.model_validate(db_cred)
             session.commit()
-            return pk
+            return schema.id
 
     def load_cred(
         self, name: str, host: str, port: str, user: str
     ) -> Optional[DbCredsSchema]:
         with self.Session() as session:
             row = (
-                session.query(DbCreds)
+                session.query(DbCredsModel)
                 .filter_by(name=name, host=host, port=port, user=user)
                 .first()
             )
             return DbCredsSchema.model_validate(row) if row else None
 
-    def list_creds(self) -> list[dict[str, str | int]]:
+    def list_creds(self) -> list[DbCredsSchema]:
         with self.Session() as session:
             rows = (
                 session.query(
-                    DbCreds.id,
-                    DbCreds.name,
-                    DbCreds.host,
-                    DbCreds.port,
-                    DbCreds.user,
+                    DbCredsModel.id,
+                    DbCredsModel.name,
+                    DbCredsModel.host,
+                    DbCredsModel.port,
+                    DbCredsModel.user,
                 )
                 .tuples()
                 .all()
             )
 
-            return [
-                {"id": id, "name": name, "host": host, "port": port, "user": user}
-                for id, name, host, port, user in rows
-            ]
+            return [DbCredsSchema.model_validate(row) for row in rows]
 
     def delete_cred(self, name: str, host: str, port: str, user: str):
         with self.Session() as session:
             row = (
-                session.query(DbCreds)
+                session.query(DbCredsModel)
                 .filter_by(name=name, host=host, port=port, user=user)
                 .first()
             )

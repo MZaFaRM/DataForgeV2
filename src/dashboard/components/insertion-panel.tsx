@@ -155,7 +155,6 @@ export default function InsertionPanel({
     const table = tbl || tableData
     if (!table) return
 
-    console.log("Initialized specs")
     let ts: TableSpecEntry = {
       name: table.name,
       noOfEntries: 50,
@@ -170,25 +169,18 @@ export default function InsertionPanel({
     }
 
     if (!!globalSpecs[table.name]) {
-      console.log("Found name in globals")
       ts = globalSpecs[table.name]
     } else if (dbCreds?.id) {
-      console.log("found only in db")
       invokeLoadSpec(dbCreds.id, table.name).then((spec) => {
         console.log(spec)
         if (!spec) return
         ts.noOfEntries = spec.noOfEntries
         ts.columns = spec.columns.reduce((acc, col) => {
-          acc[col.name] = {
-            name: col.name,
-            type: col.type,
-            generator: col.generator,
-          }
+          acc[col.name] = col
           return acc
         }, {} as ColumnSpecMap)
       })
     }
-    console.log("loaded specs", ts)
     setTableSpecs(ts)
   }
 
@@ -427,7 +419,6 @@ export default function InsertionPanel({
                 )}
               >
                 <RenderPreview
-                  tableMetadata={tableData}
                   tablePackets={tablePackets}
                   doRefresh={handleVerifyTableSpec}
                   noOfRows={tableSpecs?.noOfEntries}
@@ -566,42 +557,6 @@ function HandleTransaction() {
         />
         <span>Rollback</span>
       </button>
-      <div>
-        <div className="inline-flex overflow-hidden rounded-md border bg-green-500 text-white">
-          {/* Primary Save button */}
-          <button
-            onClick={() => {
-              console.log("Primary Save action - Insert to DB")
-            }}
-            className={cn(
-              "flex w-[145px] items-center px-3 py-2 text-sm font-medium hover:bg-green-600"
-            )}
-          >
-            <Icon icon="proicons:database-add" className="mr-2 h-4 w-4" />
-            Insert into DB
-          </button>
-
-          {/* Dropdown trigger */}
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <button
-                className="flex items-center border-l px-2 py-2 hover:bg-green-600"
-                onClick={(e) => e.preventDefault()} // optional, avoids double triggers
-              >
-                <Icon icon="mdi:chevron-down" className="h-4 w-4" />
-              </button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent
-              style={{ marginLeft: "-146px", width: "180px" }}
-            >
-              <DropdownMenuItem onSelect={() => console.log("Export SQL")}>
-                <Icon icon="mdi:file-export" className="mr-4 h-4 w-4" />
-                Export SQL
-              </DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
-        </div>
-      </div>
     </div>
   )
 }

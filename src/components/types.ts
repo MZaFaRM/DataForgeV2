@@ -95,6 +95,6 @@ export type ErrorPacketMap = Record<string, ErrorPacket[]>
 export interface TablePacket {
   name: string
   columns: string[]
-  entries: string[][]
+  entries: (string | null)[][]
   errors: ErrorPacket[]
 }

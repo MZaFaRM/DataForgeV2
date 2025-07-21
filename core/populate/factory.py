@@ -1,39 +1,32 @@
 import ast
-from dataclasses import dataclass
-import json
 import logging
 import math
-from numbers import Number
 import os
-from collections.abc import Sequence
-from pathlib import Path
 import random
 import re
+from collections.abc import Sequence
+from dataclasses import dataclass
+from numbers import Number
+from pathlib import Path
 from typing import Any, Callable
 
-from faker import Faker
 import faker
 import networkx as nx
-from networkx import Graph
 import rstr
+from faker import Faker
+from networkx import Graph
 from sqlalchemy import create_engine, inspect
 from sqlalchemy import text as sql_text
 from sqlalchemy.engine import Engine, Inspector
 from sqlalchemy.engine.reflection import Inspector
 
-from core.helpers import cap_string, cap_numeric
+from core.helpers import cap_numeric, cap_string
 from core.populate.config import DBFRegistry
-from core.settings import DB_PATH, LOG_PATH
-from core.utils.decorators import requires
+from core.settings import LOG_PATH
 from core.utils.exceptions import MissingRequiredAttributeError, VerificationError
+from core.utils.types import ColumnMetadata, ColumnSpec, DbCredsSchema, ForeignKeyRef
 from core.utils.types import GeneratorType as GType
-from core.utils.types import (
-    ColumnMetadata,
-    ColumnSpec,
-    DbCredsSchema,
-    ForeignKeyRef,
-    TableMetadata,
-)
+from core.utils.types import TableMetadata, TablePacket
 
 
 class DatabaseFactory:
@@ -56,6 +49,11 @@ class DatabaseFactory:
         }
 
     def from_dict(self, data: dict):
+        if self.id != None:
+            raise ValueError(
+                "Already connected to a database. Please create a new instance."
+            )
+
         for key in ["host", "user", "port", "name", "password"]:
             if key not in data:
                 raise ValueError(f"Missing required key: {key}")
@@ -72,6 +70,11 @@ class DatabaseFactory:
         )
 
     def from_schema(self, schema: DbCredsSchema) -> None:
+        if self.id != None:
+            raise ValueError(
+                "Already connected to a database. Please create a new instance."
+            )
+
         for key in ["host", "user", "port", "name", "password"]:
             if not hasattr(schema, key):
                 raise ValueError(f"Missing required key: {key}")
@@ -80,22 +83,36 @@ class DatabaseFactory:
     @property
     def url(self) -> str:
         if not hasattr(self, "_url"):
-            raise MissingRequiredAttributeError(
-                "URL has not been created. Call 'create_url' first."
-            )
+            if self.user and self.password and self.host and self.port and self.name:
+                self._url = f"mysql+pymysql://{self.user}:{self.password}@{self.host}:{self.port}/{self.name}"
+            else:
+                raise MissingRequiredAttributeError(
+                    "Required arguments for url: user, password, host, port and name not set."
+                )
         return self._url
 
     @property
     def engine(self) -> Engine:
         if not hasattr(self, "_engine"):
-            raise MissingRequiredAttributeError(
-                "Engine is not initialized. Call 'create_engine' first."
-            )
+            self._engine = create_engine(self.url, echo=False)
+            self.setup_logging()
         return self._engine
 
     @property
     def inspector(self) -> Inspector:
-        return inspect(self._engine)
+        return inspect(self.engine)
+
+    @property
+    def connection(self):
+        if not hasattr(self, "engine"):
+            raise MissingRequiredAttributeError(
+                "Engine is not initialized. Call 'create_engine' first."
+            )
+        return self.engine
+
+    @property
+    def transaction(self):
+        pass
 
     def setup_logging(self):
         logger = logging.getLogger("sqlalchemy")
@@ -136,14 +153,6 @@ class DatabaseFactory:
             with open(log_file, "w") as f:
                 f.write("")
 
-    def create_url(self, engine: str = "mysql") -> str:
-        if engine == "mysql":
-            self._url = f"mysql+pymysql://{self.user}:{self.password}@{self.host}:{self.port}/{self.name}"
-        else:
-            raise Exception(f"Unsupported engine: {engine}")
-        return self._url
-
-    @requires("host", "user", "port", "name", "password")
     def save(self):
         pk = self.registry.save_cred(
             DbCredsSchema(
@@ -169,33 +178,17 @@ class DatabaseFactory:
         else:
             return False
 
-    @requires("host", "user", "port", "name", "password")
-    def connect(self) -> bool:
-        self.create_url()
-        self.create_engine()
-        self.test_connection()
-        return True
-
-    @requires("url")
-    def create_engine(self) -> Engine:
-        self.setup_logging()
-        self._engine = create_engine(self._url, echo=False)
-        return self._engine
-
-    @requires("engine")
     def test_connection(self) -> bool:
-        with self._engine.connect() as connection:
+        with self.engine.connect() as connection:
             connection.execute(sql_text("SELECT 1"))
         return True
 
-    @requires("engine")
     def get_columns(self, table_name: str) -> list:
         """
         Returns the columns of a table.
         """
         return self.inspector.get_columns(table_name)
 
-    @requires("engine")
     def get_tables(self) -> dict:
         tables = self.inspector.get_table_names()
         table_info = {table: {"parents": 0, "rows": 0} for table in tables}
@@ -211,7 +204,6 @@ class DatabaseFactory:
 
         return table_info
 
-    @requires("engine")
     def sort_tables(self, tables: list[str] | None = None) -> list[str]:
         """
         Sorts the tables based on their foreign key dependencies.
@@ -234,7 +226,6 @@ class DatabaseFactory:
         sorted_tables = list(nx.topological_sort(graph))
         return sorted_tables
 
-    @requires("engine")
     def score_edge(self, source: str, target: str) -> int | float:
         fks = self.inspector.get_foreign_keys(target)
         columns = self.inspector.get_columns(target)
@@ -255,7 +246,6 @@ class DatabaseFactory:
 
         return float("inf")
 
-    @requires("engine")
     def get_dependency_graph(self, tables: list[str]) -> Graph:
         graph = nx.DiGraph()
         for table in tables:
@@ -266,7 +256,6 @@ class DatabaseFactory:
             graph.add_node(table)
         return graph
 
-    @requires("engine")
     def get_table_metadata(self, table_name: str) -> TableMetadata:
         if table_name not in self.inspector.get_table_names():
             raise ValueError(f"Table '{table_name}' does not exist in the database.")
@@ -312,7 +301,6 @@ class DatabaseFactory:
             columns=columns,
         )
 
-    @requires("engine")
     def get_unique_columns(self, table: str) -> tuple[list[str], list[tuple[str, ...]]]:
         s_unique_cols = set()
         m_unique_cols = set()
@@ -339,7 +327,6 @@ class DatabaseFactory:
 
         return list(s_unique_cols), list(m_unique_cols)
 
-    @requires("engine")
     def get_foreign_keys(self, table: str) -> dict[str, ForeignKeyRef]:
         fk_map = {}
 
@@ -356,7 +343,6 @@ class DatabaseFactory:
 
         return fk_map
 
-    @requires("engine")
     def get_existing_values(self, table: str, column: str) -> list[str]:
         with self.engine.connect() as conn:
             result = conn.execute(
@@ -367,7 +353,6 @@ class DatabaseFactory:
             values = [row[0] for row in result]
         return values
 
-    @requires("engine")
     def run_sql(self, sql: str) -> list[dict] | int:
         try:
             with self.engine.begin() as conn:
@@ -380,11 +365,26 @@ class DatabaseFactory:
                     return rows
                 else:
                     logging.info(f"Rows affected: {result.rowcount}")
-                    return result.rowcount  # or just True if you prefer
+                    return result.rowcount
 
         except Exception as e:
             logging.error(f"Error executing SQL: {e}")
             raise e
+
+    def insert_packet(self, packet: TablePacket, commit: bool = False):
+        table_name = packet.name
+        if not packet.columns or not packet.entries:
+            raise ValueError("Missing columns and/or entries.")
+
+        entries = [dict(zip(packet.columns, entry)) for entry in packet.entries]
+
+        sql = f"INSERT INTO `{table_name}` ({', '.join(packet.columns)}) VALUES (:{', :'.join(packet.columns)});"
+
+        if not commit:
+            with self.engine.begin() as conn:
+                for entry in entries:
+                    conn.execute(sql_text(sql), entry)
+            return True
 
 
 @dataclass
@@ -412,18 +412,18 @@ class GeneratorFactory:
     def __init__(self) -> None:
         self.faker = Faker()
 
-    def make(self, type: GType, context: ContextFactory) -> list[str]:
+    def make(self, type: GType, context: ContextFactory) -> list[str | None]:
         make_fn = getattr(self, f"make_{type.value}", None)
         if make_fn is None or not callable(make_fn):
             raise ValueError(f"Unknown generator type: {type}")
         return make_fn(context)  # type: ignore
 
-    def make_faker(self, context: ContextFactory) -> list[str]:
+    def make_faker(self, context: ContextFactory) -> list[str | None]:
         assert context.col_spec.generator, "Faker generator is not specified."
         faker_fn = getattr(self.faker, context.col_spec.generator)
         return self._sample_values(context.n, faker_fn, context.column)
 
-    def make_python(self, context: ContextFactory) -> list[str]:
+    def make_python(self, context: ContextFactory) -> list[str | None]:
         if not context.col_spec.generator:
             return []
 
@@ -460,11 +460,11 @@ class GeneratorFactory:
         except SyntaxError as e:
             raise VerificationError(f"Syntax Error in Python script: {e}")
 
-    def make_regex(self, context: ContextFactory) -> list[str]:
+    def make_regex(self, context: ContextFactory) -> list[str | None]:
         regex_fn = lambda: rstr.xeger(context.col_spec.generator or "")
         return self._sample_values(context.n, regex_fn, context.column)
 
-    def make_foreign(self, context: ContextFactory) -> list[str]:
+    def make_foreign(self, context: ContextFactory) -> list[str | None]:
         column = context.column
         fk = column.foreign_keys
         cache = context.cache
@@ -482,20 +482,15 @@ class GeneratorFactory:
 
         return [random.choice(rows) for _ in range(context.n)]
 
-    def make_autoincrement(self, context: ContextFactory) -> list[str]:
-        existing = context.dbf.get_existing_values(
-            context.table.name, context.column.name
-        )
-        max_val = max((v for v in existing if isinstance(v, int)), default=0)
+    def make_autoincrement(self, context: ContextFactory) -> list[str | None]:
+        return [None for _ in range(context.n)]
 
-        return [f"{max_val + i + 1} [auto]" for i in range(context.n)]
-
-    def make_computed(self, context: ContextFactory) -> list[str]:
-        return ["[expr]" for _ in range(context.n)]
+    def make_computed(self, context: ContextFactory) -> list[str | None]:
+        return [None for _ in range(context.n)]
 
     def _sample_values(
         self, n: int, gen_fn: Callable, col: ColumnMetadata
-    ) -> list[str]:
+    ) -> list[str | None]:
         overshoot = math.ceil(n * 1.5)
         rows = []
         for _ in range(overshoot):

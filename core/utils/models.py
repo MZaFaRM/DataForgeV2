@@ -1,19 +1,21 @@
 import base64
-import enum
-import os
-from core.utils.types import GeneratorType
 
 from sqlalchemy import (
     Column,
+    DateTime,
     Enum,
-    Float,
     ForeignKey,
     Integer,
+    PrimaryKeyConstraint,
     String,
     Text,
     UniqueConstraint,
+    func,
 )
+from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import declarative_base, relationship
+
+from core.utils.types import GeneratorType
 
 Base = declarative_base()
 
@@ -64,3 +66,13 @@ class ColumnSpecModel(Base):
 
     __tablename__ = "column_specs"
     __table_args__ = (UniqueConstraint("table_id", "name", name="uq_column_name_per_table"),)
+
+
+class UsageStatModel(Base):
+    db_id = Column(Integer, ForeignKey("db_creds.id", ondelete="CASCADE"), nullable=False)
+    table_name = Column(String(255), nullable=False)
+    rows = Column(Integer, nullable=False)
+    last_accessed = Column(DateTime, nullable=False, server_default=func.now(), onupdate=func.now())
+    
+    __tablename__ = "usage_stats"
+    __table_args__ = (PrimaryKeyConstraint("db_id", "table_name", name="pk_usage_stat_per_table"),)

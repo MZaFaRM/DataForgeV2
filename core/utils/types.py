@@ -83,3 +83,10 @@ class DbCredsSchema(BaseModel):
     user: str
     password: str = ""
     model_config = {"from_attributes": True}
+
+
+class UsageStatSchema(BaseModel):
+    db_id: int
+    table_name: str
+    rows: int
+    last_accessed: Optional[str] = None

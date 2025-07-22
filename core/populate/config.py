@@ -4,8 +4,14 @@ from typing import Optional
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 
-from core.utils.models import Base, ColumnSpecModel, DbCredsModel, TableSpecModel
-from core.utils.types import ColumnSpec, DbCredsSchema, TableSpec
+from core.utils.models import (
+    Base,
+    ColumnSpecModel,
+    DbCredsModel,
+    TableSpecModel,
+    UsageStatModel,
+)
+from core.utils.types import ColumnSpec, DbCredsSchema, TableSpec, UsageStatSchema
 from core.settings import DB_PATH
 
 
@@ -101,3 +107,20 @@ class DBFRegistry:
                 return spec
             return None
 
+    def get_usage_stats(self, db_id: int) -> list[UsageStatSchema]:
+        with self.Session() as session:
+            row = session.query(UsageStatModel).filter_by(db_id=db_id).all()
+            return [UsageStatSchema.model_validate(stat) for stat in row]
+
+    def save_usage_stat(self, stat: UsageStatSchema):
+        with self.Session() as session:
+            row = (
+                session.query(UsageStatModel)
+                .filter_by(db_id=stat.db_id, table_name=stat.table_name)
+                .first()
+            )
+            if row:
+                stat.rows += row.rows  # type: ignore
+            else:
+                row = UsageStatModel(**stat.model_dump())
+            session.merge(row)

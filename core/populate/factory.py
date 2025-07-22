@@ -34,7 +34,13 @@ from core.utils.exceptions import (
     ValidationWarning,
     VerificationError,
 )
-from core.utils.types import ColumnMetadata, ColumnSpec, DbCredsSchema, ForeignKeyRef
+from core.utils.types import (
+    ColumnMetadata,
+    ColumnSpec,
+    DbCredsSchema,
+    ForeignKeyRef,
+    UsageStatSchema,
+)
 from core.utils.types import GeneratorType as GType
 from core.utils.types import TableMetadata, TablePacket
 from urllib.parse import quote_plus
@@ -273,6 +279,32 @@ class DatabaseFactory:
             graph.add_node(table)
         return graph
 
+    def get_database_rows(self) -> list[dict]:
+        if not self.id:
+            raise ValueError("Database ID is not set.")
+
+        tables = self.inspector.get_table_names()
+        rows = {}
+
+        query_parts = [
+            f"SELECT '{table}' AS name, COUNT(*) AS total FROM {table}"
+            for table in tables
+        ]
+        query = " UNION ALL ".join(query_parts)
+
+        with self.engine.connect() as conn:
+            result = conn.execute(sql_text(query)).fetchall()
+            rows = {
+                row.name: {"name": row.name, "total": row.total, "new": 0}
+                for row in result
+            }
+
+        new_rows = self.registry.get_usage_stats(self.id)
+        for row in new_rows:
+            rows[row.table_name]["new"] = row.rows
+
+        return list(rows.values())
+
     def get_table_metadata(self, table_name: str) -> TableMetadata:
         if table_name not in self.inspector.get_table_names():
             raise ValueError(f"Table '{table_name}' does not exist in the database.")
@@ -443,6 +475,17 @@ class DatabaseFactory:
         self.ensure_transaction()
         self.connection.execute(sql_text(sql), entries)
         self.uncommitted += 1
+
+        if self.id is None:
+            raise ValueError("Database ID is not set.")
+
+        self.registry.save_usage_stat(
+            UsageStatSchema(
+                db_id=self.id,
+                table_name=table_name,
+                rows=len(entries),
+            )
+        )
 
 
 @dataclass

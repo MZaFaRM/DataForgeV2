@@ -258,3 +258,6 @@ class Runner:
     def _handle_set_rollback_db(self, _: dict) -> dict:
         self.dbf.rollback()
         return self._ok("Rollbacked all transactions successfully!")
+
+    def _handle_get_rows_config(self, _: dict) -> dict:
+        return self._ok(self.dbf.get_database_rows())

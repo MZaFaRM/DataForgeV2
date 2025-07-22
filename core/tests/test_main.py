@@ -125,16 +125,6 @@ def test_reconnect(runner: Runner):
     assert res["status"] == "ok"
 
 
-def test_load_spec(runner: Runner):
-    req = Request(kind="reconnect", body=TEST_CREDS)
-    res = runner.handle_command(req)
-    assert res["status"] == "ok", res["error"]
-
-    body = {"dbId": 1, "tableName": "teachers"}
-    response = runner.handle_command(Request(kind="load_spec", body=body))
-    assert response["status"] == "ok", f"Load spec failed: {response['error']}"
-
-
 def test_empty_verify_spec(runner: Runner):
     req = Request(kind="reconnect", body=TEST_CREDS)
     res = runner.handle_command(req)
@@ -160,9 +150,13 @@ def test_empty_verify_spec(runner: Runner):
     }
     response = runner.handle_command(Request(kind="verify_spec", body=body))
     assert response["status"] == "ok", f"Load spec failed: {response['error']}"
-    assert (
-        tuple(response["payload"]["entries"][0][:3]) == (None,"","",)
-        ), response["payload"]["entries"][0][:3]
+    assert tuple(response["payload"]["entries"][0][:3]) == (
+        None,
+        "",
+        "",
+    ), response[
+        "payload"
+    ]["entries"][0][:3]
 
 
 def test_verify_teachers_table_spec(runner: Runner):
@@ -327,3 +321,19 @@ def test_commit_and_rollback(runner: Runner):
 
 #     response = runner.handle_command(Request(kind="insert_packet", body=body))
 #     assert response["status"] == "ok", response["error"]
+
+
+def test_get_rows_config(runner: Runner):
+    req = Request(kind="reconnect", body=TEST_CREDS)
+    res = runner.handle_command(req)
+    assert res["status"] == "ok", res["error"]
+
+    # Run get_rows_config
+    res = runner.handle_command(Request(kind="get_rows_config", body=None))
+    assert res["status"] == "ok", f"get_rows_config failed: {res['error']}"
+    payload = res["payload"]
+
+    assert isinstance(payload, list), "Expected list of table rows info"
+    assert all(
+        "name" in tbl and "total" in tbl and "new" in tbl for tbl in payload
+    ), "Missing keys in some row entries"

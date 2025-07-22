@@ -7,6 +7,7 @@ import { toast } from "@/components/ui/use-toast"
 
 export default function RenderLogs({ activeTab }: { activeTab?: string }) {
   const [logs, setLogs] = useState<string[]>([])
+  const [showCheck, setShowCheck] = useState<boolean>(false)
 
   useEffect(() => {
     if (activeTab === "log") {
@@ -32,20 +33,12 @@ export default function RenderLogs({ activeTab }: { activeTab?: string }) {
 
   function clearLogs() {
     invokeClearLogs()
-      .then((success) => {
-        if (success) {
-          setLogs([])
-          toast({
-            variant: "success",
-            title: "Logs cleared successfully",
-          })
-        } else {
-          toast({
-            variant: "destructive",
-            title: "Failed to clear logs",
-            description: "Please try again later.",
-          })
-        }
+      .then((logs) => {
+        setLogs(logs)
+        setShowCheck(true)
+        setTimeout(() => {
+          setShowCheck(false)
+        }, 2000)
       })
       .catch((error) => {
         console.error("Error clearing logs:", error)
@@ -81,9 +74,15 @@ export default function RenderLogs({ activeTab }: { activeTab?: string }) {
 
       <div
         className={cn(
-          "absolute bottom-4 right-4 z-10 bg-inherit p-2 text-right"
+          "absolute bottom-4 right-4 z-10 flex items-center bg-inherit p-2 text-right"
         )}
       >
+        {showCheck && (
+          <Icon
+            icon="lets-icons:check-fill"
+            className="mr-4 h-6 w-6 animate-fade-in-out-once text-green-500"
+          />
+        )}
         <button
           className={cn(
             "flex items-center rounded border px-4 py-2 text-sm font-medium",

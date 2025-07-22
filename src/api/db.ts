@@ -51,7 +51,7 @@ export function invokeGetLogs(lines: number = 200) {
 }
 
 export function invokeClearLogs() {
-  return invokeAndExtract<void, boolean>({ kind: "clear_logs" })
+  return invokeAndExtract<void, []>({ kind: "clear_logs" })
 }
 
 export function invokeRunSql(sql: string) {

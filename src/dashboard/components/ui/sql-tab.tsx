@@ -30,10 +30,10 @@ export default function SqlInsertionTab({
     invokeRunSql(sqlScript)
       .then((success) => {
         if (success) {
-          toast({
-            variant: "success",
-            title: "SQL executed successfully",
-          })
+          // toast({
+          //   variant: "success",
+          //   title: "SQL executed successfully",
+          // })
           onSuccess()
         } else {
           toast({

@@ -168,6 +168,7 @@ class DatabaseFactory:
         if os.path.exists(log_file):
             with open(log_file, "w") as f:
                 f.write("")
+        return []
 
     def save(self):
         pk = self.registry.save_cred(

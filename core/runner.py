@@ -228,15 +228,13 @@ class Runner:
 
     def _handle_get_logs(self, body: dict) -> dict:
         try:
-            logs = self.dbf.read_logs(lines=(body.get("lines", 200) if body else 200))
-            return self._ok(logs)
+            return self._ok(self.dbf.read_logs(lines=(body.get("lines", 200) if body else 200)))
         except Exception as e:
             return self._err(f"Failed to retrieve logs: {str(e)}")
 
     def _handle_clear_logs(self, body: dict) -> dict:
         try:
-            self.dbf.clear_logs()
-            return self._ok("Logs cleared successfully.")
+            return self._ok(self.dbf.clear_logs())
         except Exception as e:
             return self._err(f"Failed to clear logs: {str(e)}")
 

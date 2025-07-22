@@ -58,32 +58,34 @@ export default function InsertTab({
   console.log("TableSpec:", tableSpec)
 
   return (
-    <Table>
-      <TableBody>
-        {tableData.columns.map((column) => (
-          <InsertTabRows
-            key={`${tableData.name}-${column.name}`}
-            column={column}
-            columnSpec={(tableSpec?.columns[column.name] as ColumnSpec) ?? {}}
-            setColumnSpec={(newSpec) =>
-              setTableSpec((prev) => {
-                if (!prev) return prev
-                return {
-                  ...prev,
-                  columns: {
-                    ...prev?.columns,
-                    [column.name]: newSpec,
-                  },
-                }
-              })
-            }
-            fakerMethods={fakerMethods}
-            hoveredGroup={hoveredGroup}
-            setHoveredGroup={setHoveredGroup}
-          />
-        ))}
-      </TableBody>
-    </Table>
+    <div className="flex h-full w-full flex-col overflow-auto">
+      <Table className="w-full flex-1">
+        <TableBody>
+          {tableData.columns.map((column) => (
+            <InsertTabRows
+              key={`${tableData.name}-${column.name}`}
+              column={column}
+              columnSpec={(tableSpec?.columns[column.name] as ColumnSpec) ?? {}}
+              setColumnSpec={(newSpec) =>
+                setTableSpec((prev) => {
+                  if (!prev) return prev
+                  return {
+                    ...prev,
+                    columns: {
+                      ...prev?.columns,
+                      [column.name]: newSpec,
+                    },
+                  }
+                })
+              }
+              fakerMethods={fakerMethods}
+              hoveredGroup={hoveredGroup}
+              setHoveredGroup={setHoveredGroup}
+            />
+          ))}
+        </TableBody>
+      </Table>
+    </div>
   )
 }
 
@@ -104,8 +106,9 @@ function InsertTabRows({
   hoveredGroup,
   setHoveredGroup,
 }: InsertTabRowsProps) {
-  const thisGroup = column.multiUnique || column.unique ? [column.name] : []
+  const thisGroup = column.multiUnique || []
   const inHovered = hoveredGroup?.includes(column.name)
+
   useEffect(() => {
     console.log("ColumnSpec updated:", columnSpec)
   }, [columnSpec])
@@ -131,12 +134,12 @@ function InsertTabRows({
               <div className="rounded border p-1 text-xs font-medium text-current">
                 PK
               </div>
-            ) : thisGroup.length == 1 ? (
+            ) : column.unique ? (
               <div className="rounded border p-1 text-xs font-medium text-current">
                 UQ
               </div>
             ) : (
-              thisGroup.length > 1 && (
+              thisGroup.length > 0 && (
                 <div className="rounded border p-1 text-xs font-medium text-current">
                   UQG
                 </div>
@@ -189,7 +192,6 @@ function GeneratorTypeSelect({
   setSelected,
   column,
 }: GeneratorTypeSelectProps) {
-
   return (
     <Select
       // key={column.name}

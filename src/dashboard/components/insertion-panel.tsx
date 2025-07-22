@@ -382,12 +382,12 @@ export default function InsertionPanel({
         </div>
         <div className="flex h-full w-full flex-col overflow-hidden rounded rounded-tr-none border">
           {tableData && tableData.columns && tableSpec ? (
-            <div className="h-full w-full">
+            <div className="flex h-full w-full flex-col">
               <div
                 key={activeTable}
                 ref={insertTabRef}
                 className={cn(
-                  "h-full w-full overflow-auto",
+                  "flex-1 overflow-auto",
                   activeTab !== "insert" && "hidden"
                 )}
               >
@@ -402,7 +402,7 @@ export default function InsertionPanel({
                 ref={previewTabRef}
                 className={cn(
                   activeTab !== "preview" && "hidden",
-                  "h-full w-full overflow-auto"
+                  "flex-1 overflow-auto"
                 )}
               >
                 <RenderPreview
@@ -488,6 +488,8 @@ function HandleTransaction({
   pendingWrites: number
   setPendingWrites: (count: number) => void
 }) {
+  const [showCheck, setShowCheck] = useState<boolean>(false)
+
   useEffect(() => {
     console.log("writes:", pendingWrites)
   }, [pendingWrites])
@@ -495,11 +497,10 @@ function HandleTransaction({
   function handleCommit() {
     invokeDbCommit()
       .then(() => {
-        toast({
-          title: "Commit Successful",
-          description: "Your changes have been committed to the database.",
-          variant: "success",
-        })
+        setShowCheck(true)
+        setTimeout(() => {
+          setShowCheck(false)
+        }, 2000)
         setPendingWrites(0)
       })
       .catch((error) => {
@@ -515,11 +516,11 @@ function HandleTransaction({
   function handleRollback() {
     invokeDbRollback()
       .then(() => {
-        toast({
-          title: "Rollback Successful",
-          description: "Your changes have been rolled back.",
-          variant: "success",
-        })
+        setShowCheck(true)
+        setTimeout(() => {
+          setShowCheck(false)
+        }, 2000)
+
         setPendingWrites(0)
       })
       .catch((error) => {
@@ -533,7 +534,13 @@ function HandleTransaction({
   }
 
   return (
-    <div className="flex gap-2">
+    <div className="flex items-center gap-2">
+      {showCheck && (
+        <Icon
+          icon="lets-icons:check-fill"
+          className="mr-4 h-6 w-6 animate-fade-in-out-once text-green-500"
+        />
+      )}
       {pendingWrites > 0 && (
         <div className="flex items-center space-x-2 px-3 py-2 text-sm font-medium text-muted-foreground">
           <Icon icon="jam:alert" className="h-4 w-4 text-yellow-500" />

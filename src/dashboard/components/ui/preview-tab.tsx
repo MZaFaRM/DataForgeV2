@@ -46,24 +46,30 @@ export default function RenderPreview({
   const [dice, setDice] = useState<number>(1)
   const [errorCols, setErrorCols] = useState<Record<string, string>>({})
   const [warnCols, setWarningCols] = useState<Record<string, string>>({})
+  const [showCheck, setShowCheck] = useState<boolean>(false)
+  const [loading, setLoading] = useState<boolean>(false)
 
   function handleInsertPacket() {
     if (!tablePacket) return
+    setLoading(true)
     invokeInsertPacket(tablePacket)
       .then((res) => {
-        toast({
-          variant: "success",
-          title: "Data inserted successfully!",
-          description: `Inserted ${tablePacket.entries.length} rows into ${tablePacket.name}`,
-        })
+        setShowCheck(true)
         setPendingWrites(res.pendingWrites)
+        setTimeout(() => {
+          setShowCheck(false)
+        }, 2000)
       })
       .catch((err) => {
+        false
         toast({
           variant: "destructive",
           title: "Error inserting data",
           description: err.message || "Unknown error occurred",
         })
+      })
+      .finally(() => {
+        setLoading(false)
       })
   }
 
@@ -239,35 +245,46 @@ export default function RenderPreview({
             </PopoverContent>
           </Popover>
         </div>
-        <div className="ml-auto inline-flex overflow-hidden rounded-md border bg-green-500 text-white">
-          <button
-            onClick={handleInsertPacket}
-            className={cn(
-              "flex w-[145px] items-center px-3 py-2 text-sm font-medium hover:bg-green-600"
-            )}
-          >
-            <Icon icon="proicons:database-add" className="mr-2 h-4 w-4" />
-            Insert into DB
-          </button>
-
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <button
-                className="flex items-center border-l px-2 py-2 hover:bg-green-600"
-                onClick={(e) => e.preventDefault()} // optional, avoids double triggers
-              >
-                <Icon icon="mdi:chevron-down" className="h-4 w-4" />
-              </button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent
-              style={{ marginLeft: "-146px", width: "180px" }}
+        <div className="ml-auto flex items-center space-x-2">
+          {showCheck && (
+            <Icon
+              icon="lets-icons:check-fill"
+              className="mr-4 h-6 w-6 animate-fade-in-out-once text-green-500"
+            />
+          )}
+          <div className="inline-flex overflow-hidden rounded-md border bg-purple-500 text-white">
+            <button
+              onClick={handleInsertPacket}
+              disabled={loading}
+              className={cn(
+                "flex w-[145px] items-center px-3 py-2",
+                "text-sm font-medium hover:bg-purple-600",
+                loading && "cursor-wait opacity-50"
+              )}
             >
-              <DropdownMenuItem onSelect={() => console.log("Export SQL")}>
-                <Icon icon="mdi:file-export" className="mr-4 h-4 w-4" />
-                Export SQL
-              </DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
+              <Icon icon="proicons:database-add" className="mr-2 h-4 w-4" />
+              Insert into DB
+            </button>
+
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <button
+                  className="flex items-center border-l px-2 py-2 hover:bg-green-600"
+                  onClick={(e) => e.preventDefault()} // optional, avoids double triggers
+                >
+                  <Icon icon="mdi:chevron-down" className="h-4 w-4" />
+                </button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent
+                style={{ marginLeft: "-146px", width: "180px" }}
+              >
+                <DropdownMenuItem onSelect={() => console.log("Export SQL")}>
+                  <Icon icon="mdi:file-export" className="mr-4 h-4 w-4" />
+                  Export SQL
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          </div>
         </div>
       </div>
     </div>

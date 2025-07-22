@@ -55,7 +55,7 @@ export default function InsertTab({
   setTableSpec,
 }: InsertTabProps) {
   const [hoveredGroup, setHoveredGroup] = useState<string[] | null>(null)
-  console.log("TableSpec:", tableSpec)
+  // console.log("TableSpec:", tableSpec)
 
   return (
     <div className="flex h-full w-full flex-col overflow-auto">
@@ -110,7 +110,7 @@ function InsertTabRows({
   const inHovered = hoveredGroup?.includes(column.name)
 
   useEffect(() => {
-    console.log("ColumnSpec updated:", columnSpec)
+    // console.log("ColumnSpec updated:", columnSpec)
   }, [columnSpec])
 
   return (

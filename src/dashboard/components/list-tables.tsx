@@ -113,7 +113,7 @@ export default function ListTables({
 
     invokeGetTables()
       .then((res) => {
-        console.log("Fetched tables:", res)
+        // console.log("Fetched tables:", res)
         setTableEntries(res)
       })
       .catch((error) => {
@@ -152,7 +152,10 @@ export default function ListTables({
       <div className="flex h-10 w-full flex-shrink-0 items-center justify-between">
         <h2 className="text-2xl font-semibold">Tables</h2>
         <p className="text-sm font-semibold text-muted-foreground">
-          Total: {tableEntries?.length || 0}, filled: 20
+          Total: {tableEntries?.length || 0} Rows:{" "}
+          {new Intl.NumberFormat("en", { notation: "compact" }).format(
+            tableEntries?.reduce((acc, entry) => acc + entry.rows, 0) || 0
+          )}
         </p>
       </div>
 

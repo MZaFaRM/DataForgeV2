@@ -217,18 +217,22 @@ class Runner:
         )
         return self._ok(spec)
 
+    def _handle_get_banner_sql(self, _: dict):
+        return self._ok(self.dbf.get_sql_banner())
+
     def _handle_run_sql(self, body: dict) -> dict:
         if body is None or "sql" not in body:
             return self._err("SQL query is required.")
         try:
-            self.dbf.run_sql(body["sql"])
-            return self._ok("Query executed successfully.")
+            return self._ok(self.dbf.run_sql(body["sql"]))
         except Exception as e:
             return self._err(f"SQL execution failed: {str(e)}")
 
     def _handle_get_logs(self, body: dict) -> dict:
         try:
-            return self._ok(self.dbf.read_logs(lines=(body.get("lines", 200) if body else 200)))
+            return self._ok(
+                self.dbf.read_logs(lines=(body.get("lines", 200) if body else 200))
+            )
         except Exception as e:
             return self._err(f"Failed to retrieve logs: {str(e)}")
 

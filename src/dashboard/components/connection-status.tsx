@@ -71,7 +71,7 @@ export default function ConnectionSelector({
   const [dbList, setDbList] = useState<DBCreds[]>([])
 
   useEffect(() => {
-    console.log(dbCreds, dbList, "dbs");
+    // console.log(dbCreds, dbList, "dbs");
   }, [dbCreds, dbList])
 
   useEffect(() => {
@@ -124,7 +124,7 @@ export default function ConnectionSelector({
       .then((creds) => {
         if (creds.length > 0) {
           setDbList(creds)
-          console.log("Fetched database credentials:", creds)
+          // console.log("Fetched database credentials:", creds)
         } else {
           setDbList([])
         }
@@ -139,7 +139,7 @@ export default function ConnectionSelector({
     invokeDbDisconnect()
       .then(() => {
         setDbCreds(null)
-        console.log("Disconnected from the database.")
+        // console.log("Disconnected from the database.")
       })
       .catch((error) => {
         console.error("Error disconnecting from the database:", error)
@@ -149,7 +149,7 @@ export default function ConnectionSelector({
   function handleDbCredsSelect(creds: DBCreds) {
     invokeDbReconnection(creds)
       .then((data) => {
-        console.log("Reconnected to the database:", creds)
+        // console.log("Reconnected to the database:", creds)
         setDbCreds({ ...creds })
         setOpen(false)
         setNewDbCreds(null)
@@ -187,7 +187,7 @@ export default function ConnectionSelector({
       password: newDbCreds?.password ?? "",
     })
       .then((res) => {
-        console.log("Connected to the database:", res)
+        // console.log("Connected to the database:", res)
         if (res) {
           handleListDbCreds()
           setDbCreds(res)

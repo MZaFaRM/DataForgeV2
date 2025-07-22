@@ -98,3 +98,8 @@ export interface TablePacket {
   entries: (string | null)[][]
   errors: ErrorPacket[]
 }
+
+export interface SqlLog {
+  log: string[],
+  prompt: string,
+}

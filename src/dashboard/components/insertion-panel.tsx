@@ -69,9 +69,12 @@ export default function InsertionPanel({
   useEffect(() => {
     if (activeTable) {
       saveToGlobal(tableSpec)
+      if (activeTab === "preview") {
+        setActiveTab("insert")
+      }
     }
     fetchActiveTableData()
-    setActiveTab("insert")
+    // setActiveTab("insert")
   }, [activeTable])
 
   useEffect(() => {
@@ -81,7 +84,7 @@ export default function InsertionPanel({
       setTablePacket(null)
       return
     }
-    setActiveTab("insert")
+    // setActiveTab("insert")
     setGlobalSpecs({})
   }, [dbCreds])
 
@@ -134,7 +137,7 @@ export default function InsertionPanel({
 
     invokeTableData(activeTable)
       .then((table) => {
-        console.log("Fetching data for table:", table)
+        // console.log("Fetching data for table:", table)
         if (!table) {
           return
         }
@@ -149,7 +152,7 @@ export default function InsertionPanel({
   }
 
   function saveToGlobal(tableSpec: TableSpecEntry | null = null) {
-    console.log("Saving table spec to global:", tableSpec)
+    // console.log("Saving table spec to global:", tableSpec)
     if (!tableSpec) return
 
     setGlobalSpecs((prev) => {
@@ -163,7 +166,7 @@ export default function InsertionPanel({
   }
 
   async function loadTableSpecs(tableData: TableMetadata | null = null) {
-    console.log("Got table to load spec: ", tableData)
+    // console.log("Got table to load spec: ", tableData)
     if (!tableData) return
 
     // Step 1: Start with default
@@ -182,7 +185,7 @@ export default function InsertionPanel({
 
     // Step 2: Try global spec
     if (globalSpecs[tableData.name]) {
-      console.log("Using global spec for table:", globalSpecs[tableData.name])
+      // console.log("Using global spec for table:", globalSpecs[tableData.name])
       ts = globalSpecs[tableData.name]
     }
 
@@ -190,7 +193,7 @@ export default function InsertionPanel({
     else if (dbCreds?.id) {
       try {
         const spec = await invokeLoadSpec(dbCreds.id, tableData.name)
-        console.log("Loaded spec from DB:", spec)
+        // console.log("Loaded spec from DB:", spec)
         if (spec && Object.keys(spec).length > 0) {
           ts.noOfEntries = spec.noOfEntries
           ts.columns = spec.columns.reduce((acc, col) => {
@@ -206,7 +209,7 @@ export default function InsertionPanel({
     // Step 4: Fill in default type if still null
     for (const col of tableData.columns) {
       const spec = ts.columns[col.name]
-      console.log("spec.type:", spec.name, spec.type)
+      // console.log("spec.type:", spec.name, spec.type)
       if (!spec.type) {
         if (col.foreignKeys?.table) {
           spec.type = "foreign"
@@ -221,7 +224,7 @@ export default function InsertionPanel({
     }
 
     // Step 5: Apply once at the end
-    console.log("Final loaded table spec:", ts)
+    // console.log("Final loaded table spec:", ts)
     setTableSpec(ts)
   }
 
@@ -239,7 +242,7 @@ export default function InsertionPanel({
 
   function handleVerifyTableSpec(tSpec: TableSpecEntry | null = null) {
     const specEntry = tSpec || tableSpec
-    console.log("Verifying table spec:", specEntry)
+    // console.log("Verifying table spec:", specEntry)
     if (!specEntry) return
 
     const newTableSpec: TableSpec = {
@@ -247,7 +250,7 @@ export default function InsertionPanel({
       noOfEntries: specEntry.noOfEntries || 50,
       columns: Object.values(specEntry.columns) as ColumnSpec[],
     }
-    console.log("Verifying table spec:", newTableSpec)
+    // console.log("Verifying table spec:", newTableSpec)
     invokeVerifySpec(newTableSpec)
       .then((res) => {
         setTablePacket(res)
@@ -491,7 +494,7 @@ function HandleTransaction({
   const [showCheck, setShowCheck] = useState<boolean>(false)
 
   useEffect(() => {
-    console.log("writes:", pendingWrites)
+    // console.log("writes:", pendingWrites)
   }, [pendingWrites])
 
   function handleCommit() {

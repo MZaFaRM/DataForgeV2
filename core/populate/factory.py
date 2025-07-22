@@ -1,13 +1,18 @@
 import ast
+from datetime import datetime
 import logging
 import math
+from multiprocessing import Process, Queue
 import os
+import platform
+from queue import Empty
 import random
 import re
 from collections.abc import Sequence
 from dataclasses import dataclass
 from numbers import Number
 from pathlib import Path
+import time
 from typing import Any, Callable
 
 import faker
@@ -19,6 +24,7 @@ from sqlalchemy import Connection, RootTransaction, create_engine, inspect
 from sqlalchemy import text as sql_text
 from sqlalchemy.engine import Engine, Inspector
 from sqlalchemy.engine.reflection import Inspector
+from tabulate import tabulate
 
 from core.helpers import cap_numeric, cap_string
 from core.populate.config import DBFRegistry
@@ -42,6 +48,7 @@ class DatabaseFactory:
         self.port = ""
         self.name = ""
         self.password = ""
+        self.DB_ENGINE = "mysql"
         self.registry = DBFRegistry()
 
     def to_dict(self) -> dict:
@@ -363,23 +370,63 @@ class DatabaseFactory:
             values = [row[0] for row in result]
         return values
 
-    def run_sql(self, sql: str) -> list[dict] | int:
+    def get_sql_banner(self) -> dict[str, list[str] | str]:
+        now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        os = platform.system()
+
+        banner = [
+            "Welcome to the DataForge monitor.  Commands end with ; or \\g.",
+            f"Session started on {now} via {os}",
+            "Connection id: 420",
+            f"Forge version: 1.0.0-alchemist ({self.DB_ENGINE.upper()})",
+            "",
+            "Copyright (c) 2025, DataForge Initiative.",
+            " All bugs reserved.",
+            "",
+            "Type 'help;' or '\\h' for help. Type '\\c' to clear the current input statement.",
+        ]
+        return {"log": banner, "prompt": self.DB_ENGINE}
+
+    def run_sql(self, sql: str) -> list:
+        def execute(engine_url: str, sql: str, queue: Queue):
+            from sqlalchemy import create_engine, text
+            from tabulate import tabulate
+
+            try:
+                engine = create_engine(engine_url)
+                with engine.begin() as conn:
+                    result = conn.execute(text(sql))
+                    output = []
+
+                    if result.returns_rows:
+                        rows = result.fetchall()
+                        headers = list(result.keys())
+                        output.extend(
+                            tabulate(
+                                rows, headers=headers, tablefmt="grid"
+                            ).splitlines()
+                        )
+                        output.append(f"{len(rows)} row(s) in set")
+                    else:
+                        output.append(f"Query OK, {result.rowcount} row(s) affected")
+                    queue.put(output)
+            except Exception as e:
+                queue.put([f"ERROR 8008 (4200): {str(e)}"])
+
+        queue = Queue()
+        p = Process(target=execute, args=(self.url, sql, queue))
+        p.start()
+        timeout = 5.0
+        p.join(timeout=timeout)
+
+        if p.is_alive():
+            p.terminate()
+            return [f"ERROR 408 (HYT00): Query timed out after {timeout:.2f} sec"]
+
         try:
-            with self.engine.begin() as conn:
-                result = conn.execute(sql_text(sql))
-                logging.info(f"Executed SQL: {sql}")
-
-                if result.returns_rows:
-                    rows = [dict(row._mapping) for row in result]
-                    logging.info(f"Returned {len(rows)} rows.")
-                    return rows
-                else:
-                    logging.info(f"Rows affected: {result.rowcount}")
-                    return result.rowcount
-
-        except Exception as e:
-            logging.error(f"Error executing SQL: {e}")
-            raise e
+            return queue.get(timeout=1)
+        except Empty:
+            return ["ERROR 408 (HYT00): No output returned"]
 
     def insert_packet(self, packet: TablePacket):
         table_name = packet.name

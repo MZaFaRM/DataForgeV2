@@ -1,4 +1,4 @@
-import { DBCreds, TableEntry, TableMetadata } from "@/components/types"
+import { DBCreds, SqlLog, TableEntry, TableMetadata } from "@/components/types"
 
 import { invokeAndExtract } from "./cli"
 
@@ -55,9 +55,15 @@ export function invokeClearLogs() {
 }
 
 export function invokeRunSql(sql: string) {
-  return invokeAndExtract<{ sql: string }, boolean>({
+  return invokeAndExtract<{ sql: string }, string[]>({
     kind: "run_sql",
-    body: { sql },
+    body: { sql: sql },
+  })
+}
+
+export function invokeGetSqlBanner() {
+  return invokeAndExtract<void, SqlLog>({
+    kind: "get_banner_sql",
   })
 }
 

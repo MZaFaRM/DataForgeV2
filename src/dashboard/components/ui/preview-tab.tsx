@@ -78,7 +78,7 @@ export default function RenderPreview({
   }, [pendingWrites])
 
   useEffect(() => {
-    console.log("Got packet:", tablePacket)
+    // console.log("Got packet:", tablePacket)
     if (tablePacket) {
       const errCol: Record<string, string> = {}
       const warnCol: Record<string, string> = {}

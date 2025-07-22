@@ -49,7 +49,7 @@ class DatabaseFactory:
             "id": self.id,
             "host": self.host,
             "user": self.user,
-            "port": self.port,
+            "port": str(self.port),
             "name": self.name,
         }
 
@@ -62,7 +62,7 @@ class DatabaseFactory:
         for key in ["id", "host", "user", "port", "name", "password"]:
             if key not in data:
                 raise ValueError(f"Missing required key: {key}")
-            setattr(self, key, str(data[key]))
+            setattr(self, key, data[key])
 
     def to_schema(self) -> DbCredsSchema:
         return DbCredsSchema(
@@ -83,7 +83,7 @@ class DatabaseFactory:
         for key in ["id", "host", "user", "port", "name", "password"]:
             if not hasattr(schema, key):
                 raise ValueError(f"Missing required key: {key}")
-            setattr(self, key, str(getattr(schema, key, None)))
+            setattr(self, key, getattr(schema, key, None))
 
     @property
     def url(self) -> str:
@@ -484,9 +484,9 @@ class GeneratorFactory:
             raise ValueError(f"No foreign key reference for column {column.name}")
 
         if not f"{fk.table}.{fk.column}" in cache:
-            cache[f"{fk.table}.{fk.column}"] = list(map(
-                str, dbf.get_existing_values(fk.table, fk.column)
-            ))
+            cache[f"{fk.table}.{fk.column}"] = list(
+                map(str, dbf.get_existing_values(fk.table, fk.column))
+            )
 
         rows = cache[f"{fk.table}.{fk.column}"]
         if not rows:

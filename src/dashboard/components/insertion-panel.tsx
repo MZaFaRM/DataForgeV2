@@ -1,42 +1,21 @@
-import { act, useEffect, useRef, useState } from "react"
 import {
   invokeDbCommit,
   invokeDbRollback,
-  invokeRunSql,
   invokeTableData,
 } from "@/api/db"
 import {
-  invokeGetFakerMethods,
   invokeLoadSpec,
   invokeVerifySpec,
 } from "@/api/fill"
 import InsertTab from "@/dashboard/components/ui/insert-tab"
 import RenderLogs from "@/dashboard/components/ui/log-tab"
 import RenderPreview from "@/dashboard/components/ui/preview-tab"
-import { sql } from "@codemirror/lang-sql"
 import { Icon } from "@iconify/react"
-import { githubDark, githubLight } from "@uiw/codemirror-theme-github"
-import CodeMirror, { EditorView } from "@uiw/react-codemirror"
-import { set } from "date-fns"
-import { ta } from "date-fns/locale"
-import { useTheme } from "next-themes"
+import { useEffect, useRef, useState } from "react"
 
-import { cn } from "@/lib/utils"
-import { Badge } from "@/components/ui/badge"
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu"
-import { Table, TableBody } from "@/components/ui/table"
-import { Toaster } from "@/components/ui/toaster"
-import { TooltipProvider } from "@/components/ui/tooltip"
-import { toast } from "@/components/ui/use-toast"
 import {
   ColumnSpec,
   ColumnSpecMap,
-  DataPackage,
   DBCreds,
   TableMetadata,
   TablePacket,
@@ -44,6 +23,11 @@ import {
   TableSpecEntry,
   TableSpecMap,
 } from "@/components/types"
+import { Badge } from "@/components/ui/badge"
+import { Toaster } from "@/components/ui/toaster"
+import { TooltipProvider } from "@/components/ui/tooltip"
+import { toast } from "@/components/ui/use-toast"
+import { cn } from "@/lib/utils"
 
 import SqlInsertionTab from "./ui/sql-tab"
 
@@ -84,9 +68,9 @@ export default function InsertionPanel({
   }, [])
 
   useEffect(() => {
-    console.log(needsRefresh, activeTab)
     if (needsRefresh && activeTab == "preview") {
       handleVerifyTableSpec()
+      setNeedsRefresh(false)
     }
   }, [activeTab])
 

@@ -160,7 +160,9 @@ def test_empty_verify_spec(runner: Runner):
     }
     response = runner.handle_command(Request(kind="verify_spec", body=body))
     assert response["status"] == "ok", f"Load spec failed: {response['error']}"
-    assert len(response["payload"]["entries"][0]) == 2, response["payload"]
+    assert (
+        tuple(response["payload"]["entries"][0][:3]) == (None,"","",)
+        ), response["payload"]["entries"][0][:3]
 
 
 def test_verify_teachers_table_spec(runner: Runner):

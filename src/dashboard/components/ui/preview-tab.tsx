@@ -176,7 +176,9 @@ export default function RenderPreview({
                         )}
                       >
                         <div className="max-w-full">
-                          {entries[rowIndex][colIndex] || "[skip]"}
+                          {entries[rowIndex][colIndex] !== null
+                            ? entries[rowIndex][colIndex]
+                            : "[skip]"}
                         </div>
                       </TableCell>
                     )

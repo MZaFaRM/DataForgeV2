@@ -79,7 +79,7 @@ class DbCredsSchema(BaseModel):
     id: Optional[int] = None
     name: str
     host: str
-    port: str
+    port: int | str
     user: str
     password: str = ""
     model_config = {"from_attributes": True}

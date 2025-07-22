@@ -71,6 +71,10 @@ export default function ConnectionSelector({
   const [dbList, setDbList] = useState<DBCreds[]>([])
 
   useEffect(() => {
+    console.log(dbCreds, dbList, "dbs");
+  }, [dbCreds, dbList])
+
+  useEffect(() => {
     handleListDbCreds()
     handleSavedDbCreds()
   }, [])

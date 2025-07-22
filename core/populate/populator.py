@@ -60,6 +60,9 @@ class Populator:
         }
 
         for col_spec in ordered_columns:
+            if col_spec.type is None or col_spec.generator is None:
+                continue
+
             col_meta = metadata.get_column(col_spec.name)
             assert col_meta, f"Column {col_spec.name} not found"
 
@@ -144,14 +147,12 @@ class Populator:
         result_python = {}
 
         for c_spec in specs:
-            if c_spec.type is None or c_spec.generator is None:
-                continue
-
             try:
                 ctype = c_spec.type
-
-                if ctype == GType.python:
-                    order = self.tf.check_python(c_spec.generator) or 0
+                if ctype is None or c_spec.generator is None:
+                    result.append(c_spec)
+                elif ctype == GType.python:
+                    order = self.tf.check_python(c_spec.generator)
                     while order in result_python:
                         order += 1
                     result_python[order] = c_spec

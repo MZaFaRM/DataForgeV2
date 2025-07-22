@@ -1,7 +1,11 @@
 import { table } from "console"
 import { useEffect, useRef, useState } from "react"
 import { invokeDbCommit, invokeDbRollback, invokeTableData } from "@/api/db"
-import { invokeLoadSpec, invokeVerifySpec } from "@/api/fill"
+import {
+  invokeGetFakerMethods,
+  invokeLoadSpec,
+  invokeVerifySpec,
+} from "@/api/fill"
 import InsertTab from "@/dashboard/components/ui/insert-tab"
 import RenderLogs from "@/dashboard/components/ui/log-tab"
 import RenderPreview from "@/dashboard/components/ui/preview-tab"
@@ -53,6 +57,7 @@ export default function InsertionPanel({
   const [tablePacket, setTablePacket] = useState<TablePacket | null>(null)
   const [pendingWrites, setPendingWrites] = useState<number>(0)
   const [needsRefresh, setNeedsRefresh] = useState<boolean>(false)
+  const [fakerMethods, setFakerMethods] = useState<string[] | null>(null)
 
   useEffect(() => {
     getTimeOfDay()
@@ -62,14 +67,27 @@ export default function InsertionPanel({
   }, [])
 
   useEffect(() => {
-    saveToGlobal(tableSpec)
+    if (activeTable) {
+      saveToGlobal(tableSpec)
+    }
     fetchActiveTableData()
     setActiveTab("insert")
-  }, [activeTable, dbCreds])
+  }, [activeTable])
+
+  useEffect(() => {
+    if (!dbCreds) {
+      setTableData(null)
+      setTableSpec(null)
+      setTablePacket(null)
+      return
+    }
+    setActiveTab("insert")
+    setGlobalSpecs({})
+  }, [dbCreds])
 
   useEffect(() => {
     setNeedsRefresh(true)
-  }, [tableSpec, activeTab, activeTable, dbCreds])
+  }, [tableSpec, activeTab, activeTable])
 
   useEffect(() => {
     if (needsRefresh && activeTab == "preview") {
@@ -96,8 +114,21 @@ export default function InsertionPanel({
     })
   }, [activeTable, dbCreds])
 
+  useEffect(() => {
+    invokeGetFakerMethods()
+      .then((methods) => {
+        setFakerMethods(methods)
+      })
+      .catch((error) => {
+        console.error("Error fetching faker methods:", error)
+      })
+  }, [])
+
   function fetchActiveTableData() {
     if (!activeTable) {
+      setTableData(null)
+      setTableSpec(null)
+      setTablePacket(null)
       return
     }
 
@@ -131,43 +162,67 @@ export default function InsertionPanel({
     })
   }
 
-  function loadTableSpecs(tableData: TableMetadata | null = null) {
+  async function loadTableSpecs(tableData: TableMetadata | null = null) {
     console.log("Got table to load spec: ", tableData)
     if (!tableData) return
 
-    if (globalSpecs[tableData.name]) {
-      console.log("Using global spec for table:", globalSpecs[tableData.name])
-      setTableSpec(globalSpecs[tableData.name])
-      return
-    } else if (dbCreds?.id) {
-      invokeLoadSpec(dbCreds.id, tableData.name).then((spec) => {
-        console.log(spec)
-        if (!spec) return
-        setTableSpec({
-          name: tableData.name,
-          noOfEntries: spec.noOfEntries,
-          columns: spec.columns.reduce((acc, col) => {
-            acc[col.name] = col
-            return acc
-          }, {} as ColumnSpecMap),
-        })
-      })
-      return
-    }
-
-    console.log("Loaded table spec:", tableSpec)
-    setTableSpec({
+    // Step 1: Start with default
+    let ts: TableSpecEntry = {
       name: tableData.name,
       noOfEntries: 50,
       columns: tableData.columns.reduce((acc, col) => {
         acc[col.name] = {
           name: col.name,
           generator: null,
-          type: "faker",
+          type: null,
         }
         return acc
       }, {} as ColumnSpecMap),
-    })
+    }
+
+    // Step 2: Try global spec
+    if (globalSpecs[tableData.name]) {
+      console.log("Using global spec for table:", globalSpecs[tableData.name])
+      ts = globalSpecs[tableData.name]
+    }
+
+    // Step 3: Try DB spec
+    else if (dbCreds?.id) {
+      try {
+        const spec = await invokeLoadSpec(dbCreds.id, tableData.name)
+        console.log("Loaded spec from DB:", spec)
+        if (spec && Object.keys(spec).length > 0) {
+          ts.noOfEntries = spec.noOfEntries
+          ts.columns = spec.columns.reduce((acc, col) => {
+            acc[col.name] = col
+            return acc
+          }, {} as ColumnSpecMap)
+        }
+      } catch (err) {
+        console.error("Failed to load spec from DB", err)
+      }
+    }
+
+    // Step 4: Fill in default type if still null
+    for (const col of tableData.columns) {
+      const spec = ts.columns[col.name]
+      console.log("spec.type:", spec.name, spec.type)
+      if (!spec.type) {
+        if (col.foreignKeys?.table) {
+          spec.type = "foreign"
+        } else if (col.autoincrement) {
+          spec.type = "autoincrement"
+        } else if (col.computed) {
+          spec.type = "computed"
+        } else {
+          spec.type = "faker"
+        }
+      }
+    }
+
+    // Step 5: Apply once at the end
+    console.log("Final loaded table spec:", ts)
+    setTableSpec(ts)
   }
 
   function updateSize() {
@@ -182,17 +237,18 @@ export default function InsertionPanel({
     }
   }
 
-  function handleVerifyTableSpec(tableSpecs: TableSpecEntry | null = null) {
-    console.log("Verifying table spec:", tableSpecs)
-    if (!tableSpecs) return
+  function handleVerifyTableSpec(tSpec: TableSpecEntry | null = null) {
+    const specEntry = tSpec || tableSpec
+    console.log("Verifying table spec:", specEntry)
+    if (!specEntry) return
 
-    const tableSpec: TableSpec = {
-      name: tableSpecs.name,
-      noOfEntries: tableSpecs.noOfEntries || 50,
-      columns: Object.values(tableSpecs.columns) as ColumnSpec[],
+    const newTableSpec: TableSpec = {
+      name: specEntry.name,
+      noOfEntries: specEntry.noOfEntries || 50,
+      columns: Object.values(specEntry.columns) as ColumnSpec[],
     }
-    console.log("Verifying table spec:", tableSpec)
-    invokeVerifySpec(tableSpec)
+    console.log("Verifying table spec:", newTableSpec)
+    invokeVerifySpec(newTableSpec)
       .then((res) => {
         setTablePacket(res)
       })
@@ -336,6 +392,7 @@ export default function InsertionPanel({
                 )}
               >
                 <InsertTab
+                  fakerMethods={fakerMethods}
                   tableData={tableData}
                   tableSpec={tableSpec}
                   setTableSpec={(spec) => setTableSpec(spec)}

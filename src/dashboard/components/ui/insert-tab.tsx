@@ -42,28 +42,20 @@ import {
 } from "@/components/types"
 
 interface InsertTabProps {
+  fakerMethods: string[] | null
   tableData: TableMetadata
   tableSpec: TableSpecEntry | null
   setTableSpec: (data: SetStateAction<TableSpecEntry | null>) => void
 }
 
 export default function InsertTab({
+  fakerMethods,
   tableData,
   tableSpec,
   setTableSpec,
 }: InsertTabProps) {
-  const [fakerMethods, setFakerMethods] = useState<string[] | null>(null)
   const [hoveredGroup, setHoveredGroup] = useState<string[] | null>(null)
-
-  useEffect(() => {
-    invokeGetFakerMethods()
-      .then((methods) => {
-        setFakerMethods(methods)
-      })
-      .catch((error) => {
-        console.error("Error fetching faker methods:", error)
-      })
-  }, [])
+  console.log("TableSpec:", tableSpec)
 
   return (
     <Table>
@@ -114,6 +106,9 @@ function InsertTabRows({
 }: InsertTabRowsProps) {
   const thisGroup = column.multiUnique || column.unique ? [column.name] : []
   const inHovered = hoveredGroup?.includes(column.name)
+  useEffect(() => {
+    console.log("ColumnSpec updated:", columnSpec)
+  }, [columnSpec])
 
   return (
     <TableRow
@@ -194,91 +189,81 @@ function GeneratorTypeSelect({
   setSelected,
   column,
 }: GeneratorTypeSelectProps) {
-  useEffect(() => {
-    if (column.foreignKeys?.table) {
-      setSelected("foreign")
-    } else if (column.autoincrement) {
-      setSelected("autoincrement")
-    } else if (column.computed) {
-      setSelected("computed")
-    }
-  }, [column])
 
   return (
-    selected && (
-      <Select
-        value={selected}
-        onValueChange={(val) => setSelected(val as GeneratorType)}
-      >
-        <SelectTrigger className="w-[180px]">
-          <SelectValue placeholder="Choose view" />
-        </SelectTrigger>
+    <Select
+      // key={column.name}
+      value={selected ?? ""}
+      onValueChange={(val) => setSelected(val as GeneratorType)}
+    >
+      <SelectTrigger className="w-[180px]">
+        <SelectValue placeholder="Generator Type" />
+      </SelectTrigger>
 
-        <SelectContent>
-          {column.foreignKeys?.table ? (
-            <SelectItem value="foreign">
+      <SelectContent>
+        {column.foreignKeys?.table ? (
+          <SelectItem value="foreign">
+            <div className="flex items-center">
+              <Icon
+                icon="tabler:package-import"
+                className="mr-2 h-4 w-4 text-yellow-400"
+              />
+              Foreign Key
+            </div>
+          </SelectItem>
+        ) : column.autoincrement ? (
+          <SelectItem value="autoincrement">
+            <div className="flex items-center">
+              <Icon
+                icon="mdi:increment"
+                className="mr-2 h-4 w-4 text-amber-400"
+              />
+              Auto Increment
+            </div>
+          </SelectItem>
+        ) : column.computed ? (
+          <SelectItem value="computed">
+            <div className="flex items-center">
+              <Icon
+                icon="fa-solid:code"
+                className="mr-2 h-4 w-4 text-blue-600"
+              />
+              Computed
+            </div>
+          </SelectItem>
+        ) : (
+          <>
+            <SelectItem value="faker">
               <div className="flex items-center">
                 <Icon
-                  icon="tabler:package-import"
-                  className="mr-2 h-4 w-4 text-yellow-400"
+                  icon="ep:collection"
+                  className="mr-2 h-4 w-4 text-purple-400"
                 />
-                Foreign Key
+                Library
               </div>
             </SelectItem>
-          ) : column.autoincrement ? (
-            <SelectItem value="autoincrement">
+            <SelectItem value="regex">
               <div className="flex items-center">
                 <Icon
-                  icon="mdi:increment"
-                  className="mr-2 h-4 w-4 text-amber-400"
+                  icon="mdi:regex"
+                  className="mr-2 h-4 w-4 text-green-500"
                 />
-                Auto Increment
+                Regex
               </div>
             </SelectItem>
-          ) : column.computed ? (
-            <SelectItem value="computed">
+            <SelectItem value="python">
               <div className="flex items-center">
                 <Icon
-                  icon="fa-solid:code"
-                  className="mr-2 h-4 w-4 text-blue-600"
+                  icon="material-icon-theme:python"
+                  className="mr-2 h-4 w-4"
                 />
-                Computed
+                Py Script
               </div>
             </SelectItem>
-          ) : (
-            <>
-              <SelectItem value="faker">
-                <div className="flex items-center">
-                  <Icon
-                    icon="ep:collection"
-                    className="mr-2 h-4 w-4 text-purple-400"
-                  />
-                  Library
-                </div>
-              </SelectItem>
-              <SelectItem value="regex">
-                <div className="flex items-center">
-                  <Icon
-                    icon="mdi:regex"
-                    className="mr-2 h-4 w-4 text-green-500"
-                  />
-                  Regex
-                </div>
-              </SelectItem>
-              <SelectItem value="python">
-                <div className="flex items-center">
-                  <Icon
-                    icon="material-icon-theme:python"
-                    className="mr-2 h-4 w-4"
-                  />
-                  Py Script
-                </div>
-              </SelectItem>
-            </>
-          )}
-        </SelectContent>
-      </Select>
-    )
+          </>
+        )}
+      </SelectContent>
+    </Select>
   )
 }
 

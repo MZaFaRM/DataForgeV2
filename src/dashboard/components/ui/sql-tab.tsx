@@ -1,43 +1,13 @@
-import { act, useEffect, useRef, useState } from "react"
-import { invokeRunSql, invokeTableData } from "@/api/db"
-import {
-  invokeGetFakerMethods,
-  invokeLoadSpec,
-  invokeVerifySpec,
-} from "@/api/fill"
-import InsertTabRows from "@/dashboard/components/ui/insert-tab"
-import RenderLogs from "@/dashboard/components/ui/log-tab"
-import RenderPreview from "@/dashboard/components/ui/preview-tab"
+import { invokeRunSql } from "@/api/db"
 import { sql } from "@codemirror/lang-sql"
 import { Icon } from "@iconify/react"
 import { githubDark, githubLight } from "@uiw/codemirror-theme-github"
 import CodeMirror, { EditorView } from "@uiw/react-codemirror"
-import { ta } from "date-fns/locale"
 import { useTheme } from "next-themes"
+import { useState } from "react"
 
-import { cn } from "@/lib/utils"
-import { Badge } from "@/components/ui/badge"
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu"
-import { Table, TableBody } from "@/components/ui/table"
-import { Toaster } from "@/components/ui/toaster"
-import { TooltipProvider } from "@/components/ui/tooltip"
 import { toast } from "@/components/ui/use-toast"
-import {
-  ColumnSpec,
-  ColumnSpecMap,
-  DataPackage,
-  DBCreds,
-  TableMetadata,
-  TablePacket,
-  TableSpec,
-  TableSpecEntry,
-  TableSpecMap,
-} from "@/components/types"
+import { cn } from "@/lib/utils"
 
 export default function SqlInsertionTab({
   onSuccess,

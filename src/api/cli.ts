@@ -21,10 +21,10 @@ export async function invokeAndExtract<T = unknown, R = unknown>(
 
     const res = JSON.parse(raw || "{}") as CliResponse<R>
 
-    if (res.status === "ok" && res.payload) {
-      return camelcaseKeys(res.payload, { deep: true }) as R
+    if (res.status === "ok") {
+      return camelcaseKeys(res.payload || {}, { deep: true }) as R
     } else {
-      throw new Error(res.error || "Unknown error")
+      throw new Error(res.error || JSON.stringify(res))
     }
   } catch (err: any) {
     throw new Error(err?.message || err)

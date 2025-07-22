@@ -207,16 +207,15 @@ class Runner:
         return self._ok(result.model_dump())
 
     def _handle_load_spec(self, body: dict) -> dict:
-        if "table_name" not in body or "db_id" not in body:
-            return self._err("Table name and db_id are required.")
+        if "table_name" not in body:
+            return self._err("Table name is required.")
+        if not self.dbf.id:
+            return self._err("Not connected to a database.")
 
         spec = self.dbf.registry.get_spec(
-            db_id=body["db_id"], table_name=body["table_name"]
+            db_id=self.dbf.id, table_name=body["table_name"]
         )
-        if not spec:
-            return self._err(f"No specification found for table '{body['name']}'.")
-
-        return self._ok(spec.model_dump())
+        return self._ok(spec)
 
     def _handle_run_sql(self, body: dict) -> dict:
         if body is None or "sql" not in body:

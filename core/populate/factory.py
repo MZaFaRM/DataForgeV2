@@ -59,7 +59,7 @@ class DatabaseFactory:
                 "Already connected to a database. Please create a new instance."
             )
 
-        for key in ["id", "host", "user", "port", "name", "password"]:
+        for key in ["host", "user", "port", "name", "password"]:
             if key not in data:
                 raise ValueError(f"Missing required key: {key}")
             setattr(self, key, data[key])

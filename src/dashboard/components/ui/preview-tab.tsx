@@ -29,9 +29,9 @@ import { ErrorPacketMap, TableMetadata, TablePacket } from "@/components/types"
 interface RenderPreviewProps {
   tablePacket: TablePacket | null
   onRefresh: () => void
-  pendingWrites: number
+  pendingWrites: number | null
   setPendingWrites: (n: number) => void
-  noOfRows: number
+  noOfRows: number | null
   setNoOfRows: (rows: number) => void
 }
 
@@ -72,6 +72,7 @@ export default function RenderPreview({
   }, [pendingWrites])
 
   useEffect(() => {
+    console.log("Got packet:", tablePacket)
     if (tablePacket) {
       const errCol: Record<string, string> = {}
       const warnCol: Record<string, string> = {}
@@ -188,7 +189,6 @@ export default function RenderPreview({
             })()}
         </TableBody>
       </Table>
-
       <div className="sticky bottom-0 mt-auto flex items-center justify-center bg-muted p-2">
         <button
           className="inline-flex items-center space-x-2 rounded-md border px-3 py-2 text-sm font-medium hover:bg-accent hover:text-accent-foreground"
@@ -232,7 +232,7 @@ export default function RenderPreview({
                 type="range"
                 min={1}
                 max={1000}
-                value={noOfRows}
+                value={noOfRows || 1}
                 onChange={(e) => setNoOfRows(Number(e.target.value))}
                 className="w-full"
               />

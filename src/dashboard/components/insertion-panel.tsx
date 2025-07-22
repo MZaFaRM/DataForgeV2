@@ -1,18 +1,17 @@
-import {
-  invokeDbCommit,
-  invokeDbRollback,
-  invokeTableData,
-} from "@/api/db"
-import {
-  invokeLoadSpec,
-  invokeVerifySpec,
-} from "@/api/fill"
+import { table } from "console"
+import { useEffect, useRef, useState } from "react"
+import { invokeDbCommit, invokeDbRollback, invokeTableData } from "@/api/db"
+import { invokeLoadSpec, invokeVerifySpec } from "@/api/fill"
 import InsertTab from "@/dashboard/components/ui/insert-tab"
 import RenderLogs from "@/dashboard/components/ui/log-tab"
 import RenderPreview from "@/dashboard/components/ui/preview-tab"
 import { Icon } from "@iconify/react"
-import { useEffect, useRef, useState } from "react"
 
+import { cn } from "@/lib/utils"
+import { Badge } from "@/components/ui/badge"
+import { Toaster } from "@/components/ui/toaster"
+import { TooltipProvider } from "@/components/ui/tooltip"
+import { toast } from "@/components/ui/use-toast"
 import {
   ColumnSpec,
   ColumnSpecMap,
@@ -23,11 +22,6 @@ import {
   TableSpecEntry,
   TableSpecMap,
 } from "@/components/types"
-import { Badge } from "@/components/ui/badge"
-import { Toaster } from "@/components/ui/toaster"
-import { TooltipProvider } from "@/components/ui/tooltip"
-import { toast } from "@/components/ui/use-toast"
-import { cn } from "@/lib/utils"
 
 import SqlInsertionTab from "./ui/sql-tab"
 
@@ -55,7 +49,7 @@ export default function InsertionPanel({
   const [tableData, setTableData] = useState<TableMetadata | null>(null)
   const [activeTab, setActiveTab] = useState<string>("insert")
   const [globalSpecs, setGlobalSpecs] = useState<TableSpecMap>({})
-  const [tableSpecs, setTableSpecs] = useState<TableSpecEntry | null>(null)
+  const [tableSpec, setTableSpec] = useState<TableSpecEntry | null>(null)
   const [tablePacket, setTablePacket] = useState<TablePacket | null>(null)
   const [pendingWrites, setPendingWrites] = useState<number>(0)
   const [needsRefresh, setNeedsRefresh] = useState<boolean>(false)
@@ -68,21 +62,23 @@ export default function InsertionPanel({
   }, [])
 
   useEffect(() => {
+    saveToGlobal(tableSpec)
+    fetchActiveTableData()
+    setActiveTab("insert")
+  }, [activeTable, dbCreds])
+
+  useEffect(() => {
+    setNeedsRefresh(true)
+  }, [tableSpec, activeTab, activeTable, dbCreds])
+
+  useEffect(() => {
     if (needsRefresh && activeTab == "preview") {
-      handleVerifyTableSpec()
+      handleVerifyTableSpec(tableSpec)
       setNeedsRefresh(false)
     }
   }, [activeTab])
 
   useEffect(() => {
-    setNeedsRefresh(true)
-  }, [tableSpecs, activeTable, dbCreds])
-
-  useEffect(() => {
-    setActiveTab("insert")
-    saveTableSpecs()
-    fetchActiveTableData()
-
     insertTabRef.current?.scrollTo({
       top: 0,
       left: 0,
@@ -100,49 +96,70 @@ export default function InsertionPanel({
     })
   }, [activeTable, dbCreds])
 
-
-  async function fetchActiveTableData() {
-    if (!dbCreds || !dbCreds.id || !activeTable) {
-      setTableData(null)
+  function fetchActiveTableData() {
+    if (!activeTable) {
       return
     }
 
-    try {
-      const table = await invokeTableData(activeTable)
-      if (!table) {
+    invokeTableData(activeTable)
+      .then((table) => {
+        console.log("Fetching data for table:", table)
+        if (!table) {
+          return
+        }
+        loadTableSpecs(table)
+        setTableData(table)
+      })
+      .catch((err) => {
+        console.error("Error fetching table data:", err)
         setTableData(null)
         return
-      }
-      setTableData(table)
-      loadTableSpecs(table)
-    } catch (err) {
-      console.error("Error fetching table data:", err)
-      setTableData(null)
-      return null
-    }
+      })
   }
 
-  function saveTableSpecs() {
-    if (!tableSpecs) return
+  function saveToGlobal(tableSpec: TableSpecEntry | null = null) {
+    console.log("Saving table spec to global:", tableSpec)
+    if (!tableSpec) return
 
     setGlobalSpecs((prev) => {
       return {
         ...prev,
-        [tableSpecs.name]: {
-          ...tableSpecs,
+        [tableSpec.name]: {
+          ...tableSpec,
         },
       }
     })
   }
 
-  function loadTableSpecs(tbl: TableMetadata | null = null) {
-    const table = tbl || tableData
-    if (!table) return
+  function loadTableSpecs(tableData: TableMetadata | null = null) {
+    console.log("Got table to load spec: ", tableData)
+    if (!tableData) return
 
-    let ts: TableSpecEntry = {
-      name: table.name,
+    if (globalSpecs[tableData.name]) {
+      console.log("Using global spec for table:", globalSpecs[tableData.name])
+      setTableSpec(globalSpecs[tableData.name])
+      return
+    } else if (dbCreds?.id) {
+      invokeLoadSpec(dbCreds.id, tableData.name).then((spec) => {
+        console.log(spec)
+        if (!spec) return
+        setTableSpec({
+          name: tableData.name,
+          noOfEntries: spec.noOfEntries,
+          columns: spec.columns.reduce((acc, col) => {
+            acc[col.name] = col
+            return acc
+          }, {} as ColumnSpecMap),
+        })
+      })
+      return
+    }
+
+    console.log("Loaded table spec:", tableSpec)
+    setTableSpec({
+      name: tableData.name,
       noOfEntries: 50,
-      columns: table.columns.reduce((acc, col) => {
+      columns: tableData.columns.reduce((acc, col) => {
         acc[col.name] = {
           name: col.name,
           generator: null,
@@ -150,22 +167,7 @@ export default function InsertionPanel({
         }
         return acc
       }, {} as ColumnSpecMap),
-    }
-
-    if (!!globalSpecs[table.name]) {
-      ts = globalSpecs[table.name]
-    } else if (dbCreds?.id) {
-      invokeLoadSpec(dbCreds.id, table.name).then((spec) => {
-        console.log(spec)
-        if (!spec) return
-        ts.noOfEntries = spec.noOfEntries
-        ts.columns = spec.columns.reduce((acc, col) => {
-          acc[col.name] = col
-          return acc
-        }, {} as ColumnSpecMap)
-      })
-    }
-    setTableSpecs(ts)
+    })
   }
 
   function updateSize() {
@@ -180,13 +182,14 @@ export default function InsertionPanel({
     }
   }
 
-  function handleVerifyTableSpec() {
-    if (!activeTable) return
+  function handleVerifyTableSpec(tableSpecs: TableSpecEntry | null = null) {
+    console.log("Verifying table spec:", tableSpecs)
+    if (!tableSpecs) return
 
     const tableSpec: TableSpec = {
-      name: activeTable,
-      noOfEntries: tableSpecs?.noOfEntries || 50,
-      columns: Object.values(tableSpecs?.columns!) as ColumnSpec[],
+      name: tableSpecs.name,
+      noOfEntries: tableSpecs.noOfEntries || 50,
+      columns: Object.values(tableSpecs.columns) as ColumnSpec[],
     }
     console.log("Verifying table spec:", tableSpec)
     invokeVerifySpec(tableSpec)
@@ -322,7 +325,7 @@ export default function InsertionPanel({
           </div>
         </div>
         <div className="flex h-full w-full flex-col overflow-hidden rounded rounded-tr-none border">
-          {tableData && tableData.columns && tableSpecs ? (
+          {tableData && tableData.columns && tableSpec ? (
             <div className="h-full w-full">
               <div
                 key={activeTable}
@@ -334,8 +337,8 @@ export default function InsertionPanel({
               >
                 <InsertTab
                   tableData={tableData}
-                  tableSpecs={tableSpecs}
-                  setTableSpecs={(spec) => setTableSpecs(spec)}
+                  tableSpec={tableSpec}
+                  setTableSpec={(spec) => setTableSpec(spec)}
                 />
               </div>
               <div
@@ -348,11 +351,11 @@ export default function InsertionPanel({
                 <RenderPreview
                   tablePacket={tablePacket}
                   onRefresh={handleVerifyTableSpec}
-                  noOfRows={tableSpecs?.noOfEntries}
+                  noOfRows={tableSpec?.noOfEntries}
                   pendingWrites={pendingWrites}
                   setPendingWrites={setPendingWrites}
                   setNoOfRows={(rows) =>
-                    setTableSpecs((prev) => {
+                    setTableSpec((prev) => {
                       if (!prev) return prev
                       return {
                         ...prev,

@@ -72,7 +72,7 @@ export interface TableSpec {
 export interface ColumnSpec {
   name: string
   generator: string | null
-  type: GeneratorType
+  type: GeneratorType | null
 }
 
 export type ColumnSpecMap = Record<string, ColumnSpec>

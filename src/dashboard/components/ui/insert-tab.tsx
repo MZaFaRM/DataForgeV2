@@ -1,4 +1,5 @@
 import { Dispatch, SetStateAction, useEffect, useState } from "react"
+import { invokeGetFakerMethods } from "@/api/fill"
 import { python } from "@codemirror/lang-python"
 import { sql } from "@codemirror/lang-sql"
 import { Icon } from "@iconify/react"
@@ -39,20 +40,19 @@ import {
   TableSpecEntry,
   TableSpecMap,
 } from "@/components/types"
-import { invokeGetFakerMethods } from "@/api/fill"
 
 interface InsertTabProps {
   tableData: TableMetadata
-  tableSpecs: TableSpecEntry | null
-  setTableSpecs: (data: SetStateAction<TableSpecEntry | null>) => void
+  tableSpec: TableSpecEntry | null
+  setTableSpec: (data: SetStateAction<TableSpecEntry | null>) => void
 }
 
 export default function InsertTab({
   tableData,
-  tableSpecs,
-  setTableSpecs,
+  tableSpec,
+  setTableSpec,
 }: InsertTabProps) {
-  const [fakerMethods, setFakerMethods] = useState<string[]>([])
+  const [fakerMethods, setFakerMethods] = useState<string[] | null>(null)
   const [hoveredGroup, setHoveredGroup] = useState<string[] | null>(null)
 
   useEffect(() => {
@@ -72,9 +72,9 @@ export default function InsertTab({
           <InsertTabRows
             key={`${tableData.name}-${column.name}`}
             column={column}
-            columnSpec={(tableSpecs?.columns[column.name] as ColumnSpec) ?? {}}
+            columnSpec={(tableSpec?.columns[column.name] as ColumnSpec) ?? {}}
             setColumnSpec={(newSpec) =>
-              setTableSpecs((prev) => {
+              setTableSpec((prev) => {
                 if (!prev) return prev
                 return {
                   ...prev,
@@ -99,7 +99,7 @@ interface InsertTabRowsProps {
   column: ColumnData
   columnSpec: ColumnSpec
   setColumnSpec: (newSpec: ColumnSpec) => void
-  fakerMethods: string[]
+  fakerMethods: string[] | null
   hoveredGroup: string[] | null
   setHoveredGroup: (group: string[] | null) => void
 }
@@ -171,7 +171,7 @@ function InsertTabRows({
       <TableCell>
         <RenderGenerator
           column={column}
-          generatorTypeSelect={columnSpec.type}
+          generatorType={columnSpec.type}
           selected={columnSpec.generator}
           setSelected={(val) =>
             setColumnSpec({ ...columnSpec, generator: val })
@@ -184,7 +184,7 @@ function InsertTabRows({
 }
 
 interface GeneratorTypeSelectProps {
-  selected: GeneratorType
+  selected: GeneratorType | null
   setSelected: (view: GeneratorType) => void
   column: ColumnData
 }
@@ -205,92 +205,94 @@ function GeneratorTypeSelect({
   }, [column])
 
   return (
-    <Select
-      value={selected}
-      onValueChange={(val) => setSelected(val as GeneratorType)}
-    >
-      <SelectTrigger className="w-[180px]">
-        <SelectValue placeholder="Choose view" />
-      </SelectTrigger>
+    selected && (
+      <Select
+        value={selected}
+        onValueChange={(val) => setSelected(val as GeneratorType)}
+      >
+        <SelectTrigger className="w-[180px]">
+          <SelectValue placeholder="Choose view" />
+        </SelectTrigger>
 
-      <SelectContent>
-        {column.foreignKeys?.table ? (
-          <SelectItem value="foreign">
-            <div className="flex items-center">
-              <Icon
-                icon="tabler:package-import"
-                className="mr-2 h-4 w-4 text-yellow-400"
-              />
-              Foreign Key
-            </div>
-          </SelectItem>
-        ) : column.autoincrement ? (
-          <SelectItem value="autoincrement">
-            <div className="flex items-center">
-              <Icon
-                icon="mdi:increment"
-                className="mr-2 h-4 w-4 text-amber-400"
-              />
-              Auto Increment
-            </div>
-          </SelectItem>
-        ) : column.computed ? (
-          <SelectItem value="computed">
-            <div className="flex items-center">
-              <Icon
-                icon="fa-solid:code"
-                className="mr-2 h-4 w-4 text-blue-600"
-              />
-              Computed
-            </div>
-          </SelectItem>
-        ) : (
-          <>
-            <SelectItem value="faker">
+        <SelectContent>
+          {column.foreignKeys?.table ? (
+            <SelectItem value="foreign">
               <div className="flex items-center">
                 <Icon
-                  icon="ep:collection"
-                  className="mr-2 h-4 w-4 text-purple-400"
+                  icon="tabler:package-import"
+                  className="mr-2 h-4 w-4 text-yellow-400"
                 />
-                Library
+                Foreign Key
               </div>
             </SelectItem>
-            <SelectItem value="regex">
+          ) : column.autoincrement ? (
+            <SelectItem value="autoincrement">
               <div className="flex items-center">
                 <Icon
-                  icon="mdi:regex"
-                  className="mr-2 h-4 w-4 text-green-500"
+                  icon="mdi:increment"
+                  className="mr-2 h-4 w-4 text-amber-400"
                 />
-                Regex
+                Auto Increment
               </div>
             </SelectItem>
-            <SelectItem value="python">
+          ) : column.computed ? (
+            <SelectItem value="computed">
               <div className="flex items-center">
                 <Icon
-                  icon="material-icon-theme:python"
-                  className="mr-2 h-4 w-4"
+                  icon="fa-solid:code"
+                  className="mr-2 h-4 w-4 text-blue-600"
                 />
-                Py Script
+                Computed
               </div>
             </SelectItem>
-          </>
-        )}
-      </SelectContent>
-    </Select>
+          ) : (
+            <>
+              <SelectItem value="faker">
+                <div className="flex items-center">
+                  <Icon
+                    icon="ep:collection"
+                    className="mr-2 h-4 w-4 text-purple-400"
+                  />
+                  Library
+                </div>
+              </SelectItem>
+              <SelectItem value="regex">
+                <div className="flex items-center">
+                  <Icon
+                    icon="mdi:regex"
+                    className="mr-2 h-4 w-4 text-green-500"
+                  />
+                  Regex
+                </div>
+              </SelectItem>
+              <SelectItem value="python">
+                <div className="flex items-center">
+                  <Icon
+                    icon="material-icon-theme:python"
+                    className="mr-2 h-4 w-4"
+                  />
+                  Py Script
+                </div>
+              </SelectItem>
+            </>
+          )}
+        </SelectContent>
+      </Select>
+    )
   )
 }
 
 interface RenderGeneratorProps {
   column: ColumnData
-  generatorTypeSelect: string
+  generatorType: string | null
   selected: string | null
   setSelected: (value: string | null) => void
-  fakerMethods: string[]
+  fakerMethods: string[] | null
 }
 
 function RenderGenerator({
   column,
-  generatorTypeSelect,
+  generatorType,
   selected,
   setSelected,
   fakerMethods,
@@ -299,16 +301,16 @@ function RenderGenerator({
   const { theme } = useTheme()
 
   useEffect(() => {
-    if (generatorTypeSelect === "foreign") {
+    if (generatorType === "foreign") {
       setSelected(`${column.foreignKeys?.table}__${column.foreignKeys?.column}`)
-    } else if (generatorTypeSelect === "autoincrement") {
+    } else if (generatorType === "autoincrement") {
       setSelected("autoincrement")
-    } else if (generatorTypeSelect === "computed") {
+    } else if (generatorType === "computed") {
       setSelected("computed")
     }
-  }, [generatorTypeSelect])
+  }, [generatorType])
 
-  return generatorTypeSelect === "faker" ? (
+  return generatorType === "faker" ? (
     <Popover open={open} onOpenChange={setOpen}>
       <PopoverTrigger asChild>
         <Button
@@ -334,29 +336,30 @@ function RenderGenerator({
           <CommandInput placeholder="Search..." />
           <CommandEmpty>No item found.</CommandEmpty>
           <CommandList>
-            {fakerMethods.map((item) => (
-              <CommandItem
-                key={item}
-                value={item}
-                onSelect={(val) => {
-                  setSelected(val)
-                  setOpen(false)
-                }}
-              >
-                {item}
-                <CheckIcon
-                  className={cn(
-                    "ml-auto h-4 w-4",
-                    selected === item ? "opacity-100" : "opacity-0"
-                  )}
-                />
-              </CommandItem>
-            ))}
+            {fakerMethods &&
+              fakerMethods.map((item) => (
+                <CommandItem
+                  key={item}
+                  value={item}
+                  onSelect={(val) => {
+                    setSelected(val)
+                    setOpen(false)
+                  }}
+                >
+                  {item}
+                  <CheckIcon
+                    className={cn(
+                      "ml-auto h-4 w-4",
+                      selected === item ? "opacity-100" : "opacity-0"
+                    )}
+                  />
+                </CommandItem>
+              ))}
           </CommandList>
         </Command>
       </PopoverContent>
     </Popover>
-  ) : generatorTypeSelect === "foreign" ? (
+  ) : generatorType === "foreign" ? (
     <Popover open={false}>
       <PopoverTrigger asChild>
         <span
@@ -375,7 +378,7 @@ function RenderGenerator({
         </span>
       </PopoverTrigger>
     </Popover>
-  ) : generatorTypeSelect === "regex" ? (
+  ) : generatorType === "regex" ? (
     <div className="w-[350px] overflow-auto rounded border">
       <div className="flex items-stretch bg-muted">
         <div className="flex w-10">
@@ -393,7 +396,7 @@ function RenderGenerator({
         </div>
       </div>
     </div>
-  ) : generatorTypeSelect === "python" ? (
+  ) : generatorType === "python" ? (
     <div className="w-[350px] overflow-clip rounded border">
       <CodeMirror
         placeholder={

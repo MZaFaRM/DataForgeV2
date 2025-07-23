@@ -1,29 +1,32 @@
-import { useState } from "react"
+import { useEffect, useState } from "react"
+import { invokeGetRowsConfig } from "@/api/db"
 import ConnectionStatus from "@/dashboard/components/connection-status"
 import InsertionPanel from "@/dashboard/components/insertion-panel"
 import ListTables from "@/dashboard/components/list-tables"
-import { MainNav } from "@/dashboard/components/main-nav"
-import { Overview } from "@/dashboard/components/overview"
-import { RecentSales } from "@/dashboard/components/recent-sales"
-import { Search } from "@/dashboard/components/search"
-import TeamSwitcher from "@/dashboard/components/team-switcher"
-import { UserNav } from "@/dashboard/components/user-nav"
 import { openUrl } from "@tauri-apps/plugin-opener"
 
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card"
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { TooltipProvider } from "@/components/ui/tooltip"
-import { DBCreds } from "@/components/types"
+import { DBCreds, UsageInfo } from "@/components/types"
 
 export default function DashboardPage() {
   const [dbCreds, setDbCreds] = useState<DBCreds | null>(null)
   const [activeTable, setActiveTable] = useState<string | null>(null)
+  const [usageInfo, setUsageInfo] = useState<UsageInfo[]>([])
+
+  useEffect(() => {
+    fetchUsageInfo()
+  }, [dbCreds])
+
+  async function fetchUsageInfo() {
+    try {
+      const info = await invokeGetRowsConfig()
+      setUsageInfo(info)
+      console.log("Usage Info:", info)
+    } catch (error) {
+      console.error("Error fetching usage info:", error)
+      setUsageInfo([])
+    }
+  }
 
   return (
     <TooltipProvider>
@@ -52,6 +55,7 @@ export default function DashboardPage() {
           </div>
           <div className="flex flex-row space-y-4">
             <ListTables
+              usageInfo={usageInfo}
               dbCreds={dbCreds}
               setActiveTable={setActiveTable}
               activeTable={activeTable}
@@ -60,6 +64,7 @@ export default function DashboardPage() {
               dbCreds={dbCreds}
               activeTable={activeTable}
               setActiveTable={setActiveTable}
+              onInserted={() => fetchUsageInfo()}
             />
           </div>
         </div>

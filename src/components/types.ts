@@ -100,6 +100,12 @@ export interface TablePacket {
 }
 
 export interface SqlLog {
-  log: string[],
-  prompt: string,
+  log: string[]
+  prompt: string
+}
+
+export interface UsageInfo {
+  tableName: string
+  totalRows: number
+  newRows: number
 }

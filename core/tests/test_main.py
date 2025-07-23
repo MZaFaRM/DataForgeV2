@@ -331,9 +331,57 @@ def test_get_rows_config(runner: Runner):
     # Run get_rows_config
     res = runner.handle_command(Request(kind="get_rows_config", body=None))
     assert res["status"] == "ok", f"get_rows_config failed: {res['error']}"
-    payload = res["payload"]
+    prior = next(
+        (table for table in res["payload"] if table["table_name"] == "teachers"), {}
+    )["new_rows"]
 
-    assert isinstance(payload, list), "Expected list of table rows info"
-    assert all(
-        "name" in tbl and "total" in tbl and "new" in tbl for tbl in payload
-    ), "Missing keys in some row entries"
+    # Insert data
+    body = {"dbId": 1, "tableName": "teachers"}
+    response = runner.handle_command(Request(kind="load_spec", body=body))
+    assert response["status"] == "ok", f"Load spec failed: {response['error']}"
+
+    packets = runner.handle_command(
+        Request(kind="verify_spec", body=response["payload"])
+    )
+    assert packets["status"] == "ok", packets["error"]
+
+    insert_res = runner.handle_command(
+        Request(kind="insert_packet", body=packets["payload"])
+    )
+    assert insert_res["status"] == "ok", insert_res["error"]
+
+    # Run get_rows_config again
+    res = runner.handle_command(Request(kind="get_rows_config", body=None))
+    assert res["status"] == "ok", f"get_rows_config failed: {res['error']}"
+    after = next(
+        (table for table in res["payload"] if table["table_name"] == "teachers"), {}
+    )["new_rows"]
+
+    assert after == (
+        prior + len(packets["payload"]["entries"])
+    ), f"{after} != {prior} + {len(packets['payload']['entries'])}"
+
+
+def test_verify_spec_order(runner: Runner):
+    req = Request(kind="reconnect", body=TEST_CREDS)
+    res = runner.handle_command(req)
+    assert res["status"] == "ok", res["error"]
+
+    spec = {
+        "name": "classes",
+        "noOfEntries": 50,
+        "columns": [
+            {
+                "name": "class_id",
+                "generator": "autoincrement",
+                "type": "autoincrement",
+            },
+            {"name": "class_name", "generator": "^(CSE|MECH|IT)$", "type": "regex"},
+            {"name": "room_number", "generator": "\n@order(1)\ndef generator(columns):\n    return random.randint(18, 25)", "type": "python"},
+            {"name": "teacher_id", "generator": None, "type": "foreign"},
+        ],
+    }
+    
+    req = Request(kind="verify_spec", body=spec)
+    res = runner.handle_command(req)
+    assert res["status"] == "ok", res["error"]

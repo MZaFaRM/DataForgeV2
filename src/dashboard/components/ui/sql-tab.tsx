@@ -59,7 +59,7 @@ export default function SqlInsertionTab({
       let output: string[] = []
 
       if (rawQuery.trim() !== "") {
-        output = await runSql(rawQuery)
+        output = await runSql(rawQuery.trim())
       }
 
       setSqlLog((prev) => ({

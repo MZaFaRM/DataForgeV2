@@ -71,7 +71,7 @@ class ColumnSpecModel(Base):
 class UsageStatModel(Base):
     db_id = Column(Integer, ForeignKey("db_creds.id", ondelete="CASCADE"), nullable=False)
     table_name = Column(String(255), nullable=False)
-    rows = Column(Integer, nullable=False)
+    new_rows = Column(Integer, nullable=False)
     last_accessed = Column(DateTime, nullable=False, server_default=func.now(), onupdate=func.now())
     
     __tablename__ = "usage_stats"

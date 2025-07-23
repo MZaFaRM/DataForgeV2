@@ -1,3 +1,4 @@
+from collections import OrderedDict
 import contextlib
 from typing import Any
 
@@ -32,16 +33,23 @@ class Populator:
     def resolve_specifications(
         self, dbf: DatabaseFactory, table_spec: TableSpec
     ) -> tuple[TableSpec, TablePacket]:
-        table_spec.db_id = dbf.id or -1
-        _errors, ordered_columns = self._validate_and_sort_specs(table_spec.columns)
-        errors, entries = self.build_table_entries(dbf, ordered_columns, table_spec)
+        if dbf.id is None:
+            raise ValueError("Database not initialized with a valid ID.")
 
+        table_spec.db_id = dbf.id
+        _errors, ordered_columns = self._validate_and_sort_specs(table_spec.columns)
+        errors, column_entries = self.build_table_entries(
+            dbf, ordered_columns, table_spec
+        )
+
+        columns = list(column_entries.keys())
+        rows = list(map(list, zip(*column_entries.values())))
         return (
             table_spec,
             TablePacket(
                 name=table_spec.name,
-                columns=[col.name for col in table_spec.columns],
-                entries=entries,
+                columns=columns,
+                entries=rows,
                 errors=_errors + errors,
             ),
         )
@@ -51,12 +59,12 @@ class Populator:
         dbf: DatabaseFactory,
         ordered_columns: list[ColumnSpec],
         table_spec: TableSpec,
-    ) -> tuple[list[ErrorPacket], list[list[str | None]]]:
+    ) -> tuple[list[ErrorPacket], dict[str, list[str | None]]]:
 
         metadata = dbf.get_table_metadata(table_spec.name)
-        errors = []
-        column_values: dict[str, list[str]] = {
-            col.name: [""] * table_spec.no_of_entries for col in ordered_columns
+        errors: list[ErrorPacket] = []
+        column_values: dict[str, list[str | None]] = {
+            col.name: [""] * table_spec.no_of_entries for col in table_spec.columns
         }
 
         for col_spec in ordered_columns:
@@ -98,7 +106,7 @@ class Populator:
                 )
 
         # make the entries row major
-        return errors, list(map(list, zip(*column_values.values())))
+        return errors, column_values
 
     # endregion
 
@@ -110,7 +118,7 @@ class Populator:
         table_meta: TableMetadata,
         col_spec: ColumnSpec,
         rows: int,
-        entries: dict[str, list[str]],
+        entries: dict[str, list[str | None]],
     ) -> list:
         max_attempts = 10
         generated_rows = []
@@ -120,7 +128,7 @@ class Populator:
             table=table_meta,
             col_spec=col_spec,
             n=rows,
-            entries=entries if entries else None,
+            entries=entries,
         )
         column = context.column
 
@@ -148,26 +156,16 @@ class Populator:
 
         for c_spec in specs:
             try:
-                ctype = c_spec.type
-                if ctype is None or c_spec.generator is None:
-                    result.append(c_spec)
-                elif ctype == GType.python:
+                if c_spec.type == GType.python and c_spec.generator:
                     order = self.tf.check_python(c_spec.generator)
                     while order in result_python:
                         order += 1
                     result_python[order] = c_spec
-                elif self.tf.check(ctype, c_spec.generator):
+
+                elif not (c_spec.type is None or c_spec.generator is None):
+                    self.tf.check(c_spec.type, c_spec.generator)
                     result.append(c_spec)
-                else:
-                    raise ValueError(f"Unsupported column type: {ctype}")
-            except ValidationWarning as e:
-                errors.append(
-                    ErrorPacket(
-                        column=c_spec.name,
-                        type="warning",
-                        msg=f"Validation warning for column '{c_spec.name}': {str(e)}",
-                    )
-                )
+
             except Exception as e:
                 errors.append(
                     ErrorPacket(
@@ -177,7 +175,7 @@ class Populator:
                     )
                 )
 
-        result = result + [spec for _, spec in sorted(result_python.items())]
+        result.extend(result_python[key] for key in sorted(result_python.keys()))
         return errors, result
 
     def _filter_rows(

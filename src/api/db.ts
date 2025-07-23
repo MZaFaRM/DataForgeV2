@@ -1,4 +1,4 @@
-import { DBCreds, SqlLog, TableEntry, TableMetadata } from "@/components/types"
+import { DBCreds, SqlLog, TableEntry, TableMetadata, UsageInfo } from "@/components/types"
 
 import { invokeAndExtract } from "./cli"
 
@@ -77,4 +77,12 @@ export function invokeDbRollback() {
 
 export function invokeDbGetUncommitted() {
   return invokeAndExtract<void, number>({ kind: "get_uncommitted_db" })
+}
+
+export function invokeGetRowsConfig() {
+return invokeAndExtract<void, UsageInfo[]>(
+    {
+      kind: "get_rows_config",
+    }
+  )
 }

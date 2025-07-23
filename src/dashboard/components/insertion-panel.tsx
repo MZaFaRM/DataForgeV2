@@ -10,6 +10,8 @@ import InsertTab from "@/dashboard/components/ui/insert-tab"
 import RenderLogs from "@/dashboard/components/ui/log-tab"
 import RenderPreview from "@/dashboard/components/ui/preview-tab"
 import { Icon } from "@iconify/react"
+import { set } from "date-fns"
+import { ca } from "date-fns/locale"
 
 import { cn } from "@/lib/utils"
 import { Badge } from "@/components/ui/badge"
@@ -33,12 +35,14 @@ interface InsertionPanelProps {
   dbCreds: DBCreds | null
   activeTable: string | null
   setActiveTable: (activeTable: string | null) => void
+  onInserted: () => void
 }
 
 export default function InsertionPanel({
   dbCreds,
   activeTable,
   setActiveTable,
+  onInserted,
 }: InsertionPanelProps) {
   const ref = useRef<HTMLDivElement>(null)
   const insertTabRef = useRef<HTMLDivElement>(null)
@@ -240,7 +244,7 @@ export default function InsertionPanel({
     }
   }
 
-  function handleVerifyTableSpec(tSpec: TableSpecEntry | null = null) {
+  async function handleVerifyTableSpec(tSpec: TableSpecEntry | null = null) {
     const specEntry = tSpec || tableSpec
     // console.log("Verifying table spec:", specEntry)
     if (!specEntry) return
@@ -251,13 +255,12 @@ export default function InsertionPanel({
       columns: Object.values(specEntry.columns) as ColumnSpec[],
     }
     // console.log("Verifying table spec:", newTableSpec)
-    invokeVerifySpec(newTableSpec)
-      .then((res) => {
-        setTablePacket(res)
-      })
-      .catch((error) => {
-        console.error("Error verifying spec:", error)
-      })
+    try {
+      const res = await invokeVerifySpec(newTableSpec)
+      setTablePacket(res)
+    } catch (error) {
+      console.error("Error verifying spec:", error)
+    }
 
     previewTabRef.current?.scrollTo({
       top: 0,
@@ -348,6 +351,7 @@ export default function InsertionPanel({
               </div>
               <div>
                 <HandleTransaction
+                  onTransactionSuccess={onInserted}
                   pendingWrites={pendingWrites}
                   setPendingWrites={setPendingWrites}
                 />
@@ -411,6 +415,7 @@ export default function InsertionPanel({
                 <RenderPreview
                   tablePacket={tablePacket}
                   onRefresh={handleVerifyTableSpec}
+                  onInserted={onInserted}
                   noOfRows={tableSpec?.noOfEntries}
                   pendingWrites={pendingWrites}
                   setPendingWrites={setPendingWrites}
@@ -440,7 +445,12 @@ export default function InsertionPanel({
                   activeTab !== "sql" && "hidden"
                 )}
               >
-                <SqlInsertionTab onSuccess={fetchActiveTableData} />
+                <SqlInsertionTab
+                  onSuccess={() => {
+                    fetchActiveTableData()
+                    onInserted()
+                  }}
+                />
               </div>
             </div>
           ) : (
@@ -487,20 +497,25 @@ function TabButton({
 function HandleTransaction({
   pendingWrites,
   setPendingWrites,
+  onTransactionSuccess,
 }: {
   pendingWrites: number
   setPendingWrites: (count: number) => void
+  onTransactionSuccess: () => void
 }) {
   const [showCheck, setShowCheck] = useState<boolean>(false)
+  const [loading, setLoading] = useState(false)
 
   useEffect(() => {
     // console.log("writes:", pendingWrites)
   }, [pendingWrites])
 
   function handleCommit() {
+    setLoading(true)
     invokeDbCommit()
       .then(() => {
         setShowCheck(true)
+        onTransactionSuccess()
         setTimeout(() => {
           setShowCheck(false)
         }, 2000)
@@ -514,12 +529,17 @@ function HandleTransaction({
           variant: "destructive",
         })
       })
+      .finally(() => {
+        setLoading(false)
+      })
   }
 
   function handleRollback() {
+    setLoading(true)
     invokeDbRollback()
       .then(() => {
         setShowCheck(true)
+        onTransactionSuccess()
         setTimeout(() => {
           setShowCheck(false)
         }, 2000)
@@ -533,6 +553,9 @@ function HandleTransaction({
           description: "There was an error rolling back your changes.",
           variant: "destructive",
         })
+      })
+      .finally(() => {
+        setLoading(false)
       })
   }
 

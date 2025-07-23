@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react"
 import { invokeInsertPacket } from "@/api/fill"
 import { Icon } from "@iconify/react"
-import { invoke } from "@tauri-apps/api/core"
+import { save } from "@tauri-apps/plugin-dialog"
 
 import { cn } from "@/lib/utils"
 import {
@@ -29,6 +29,7 @@ import { ErrorPacketMap, TableMetadata, TablePacket } from "@/components/types"
 interface RenderPreviewProps {
   tablePacket: TablePacket | null
   onRefresh: () => void
+  onInserted: () => void
   pendingWrites: number | null
   setPendingWrites: (n: number) => void
   noOfRows: number | null
@@ -38,6 +39,7 @@ interface RenderPreviewProps {
 export default function RenderPreview({
   tablePacket,
   onRefresh,
+  onInserted,
   noOfRows,
   pendingWrites,
   setPendingWrites,
@@ -55,6 +57,7 @@ export default function RenderPreview({
     invokeInsertPacket(tablePacket)
       .then((res) => {
         setShowCheck(true)
+        onInserted()
         setPendingWrites(res.pendingWrites)
         setTimeout(() => {
           setShowCheck(false)
@@ -122,6 +125,28 @@ export default function RenderPreview({
     }
   }, [tablePacket])
 
+  async function handleSaveToFile() {
+    const filePath = await save({
+      filters: [
+        {
+          name: "Image",
+          extensions: ["png", "jpeg"],
+        },
+      ],
+    })
+  }
+
+  async function doRefresh() {
+    setLoading(true)
+    try {
+      await onRefresh()
+    } catch (error) {
+      console.error("Error refreshing:", error)
+    } finally {
+      setLoading(false)
+    }
+  }
+
   function shuffleDice() {
     const MaxRolls = 5
     let rollCount = 0
@@ -136,7 +161,7 @@ export default function RenderPreview({
   }
 
   return (
-    <div className="flex min-h-full flex-col">
+    <div className={cn("flex min-h-full flex-col", loading && "cursor-wait")}>
       <Table className="flex-shrink-0">
         <TableHeader>
           <TableRow>
@@ -200,7 +225,7 @@ export default function RenderPreview({
           className="inline-flex items-center space-x-2 rounded-md border px-3 py-2 text-sm font-medium hover:bg-accent hover:text-accent-foreground"
           onClick={() => {
             shuffleDice()
-            onRefresh()
+            doRefresh()
           }}
         >
           {Array.from({ length: 7 }).map((_, i) => (
@@ -216,7 +241,7 @@ export default function RenderPreview({
           <span>Refresh</span>
         </button>
         <div>
-          <Popover onOpenChange={(open) => !open && onRefresh()}>
+          <Popover onOpenChange={(open) => !open && doRefresh()}>
             <PopoverTrigger asChild>
               <div
                 className={cn(
@@ -252,6 +277,11 @@ export default function RenderPreview({
               className="mr-4 h-6 w-6 animate-fade-in-out-once text-green-500"
             />
           )}
+          {errorCols && Object.keys(errorCols).length > 0 ? (
+            <Icon icon="jam:alert" className="h-5 w-5 text-red-500" />
+          ) : warnCols && Object.keys(warnCols).length > 0 ? (
+            <Icon icon="jam:alert" className="h-5 w-5 text-yellow-500" />
+          ) : null}
           <div className="inline-flex overflow-hidden rounded-md border bg-purple-500 text-white">
             <button
               onClick={handleInsertPacket}
@@ -269,7 +299,7 @@ export default function RenderPreview({
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <button
-                  className="flex items-center border-l px-2 py-2 hover:bg-green-600"
+                  className="flex items-center border-l px-2 py-2 hover:bg-purple-600"
                   onClick={(e) => e.preventDefault()} // optional, avoids double triggers
                 >
                   <Icon icon="mdi:chevron-down" className="h-4 w-4" />
@@ -278,7 +308,7 @@ export default function RenderPreview({
               <DropdownMenuContent
                 style={{ marginLeft: "-146px", width: "180px" }}
               >
-                <DropdownMenuItem onSelect={() => console.log("Export SQL")}>
+                <DropdownMenuItem onSelect={handleSaveToFile}>
                   <Icon icon="mdi:file-export" className="mr-4 h-4 w-4" />
                   Export SQL
                 </DropdownMenuItem>

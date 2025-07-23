@@ -1,6 +1,8 @@
+from datetime import datetime
 import enum
 from typing import Literal, Optional
 from pydantic import BaseModel
+from sqlalchemy import Column, ColumnElement
 
 
 class GeneratorType(str, enum.Enum):
@@ -52,7 +54,9 @@ class TableMetadata(BaseModel):
 class ColumnSpec(BaseModel):
     name: str
     generator: Optional[str] = None
-    type: GeneratorType
+    type: GeneratorType | None = None
+
+    model_config = {"from_attributes": True}
 
 
 class TableSpec(BaseModel):
@@ -60,6 +64,8 @@ class TableSpec(BaseModel):
     name: str
     no_of_entries: int
     columns: list[ColumnSpec]
+
+    model_config = {"from_attributes": True}
 
 
 class ErrorPacket(BaseModel):
@@ -82,11 +88,14 @@ class DbCredsSchema(BaseModel):
     port: int | str
     user: str
     password: str = ""
+
     model_config = {"from_attributes": True}
 
 
 class UsageStatSchema(BaseModel):
     db_id: int
     table_name: str
-    rows: int
-    last_accessed: Optional[str] = None
+    new_rows: int
+    last_accessed: Optional[datetime] = None
+
+    model_config = {"from_attributes": True}

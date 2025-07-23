@@ -13,7 +13,7 @@ from dataclasses import dataclass
 from numbers import Number
 from pathlib import Path
 import time
-from typing import Any, Callable
+from typing import Any, Callable, Literal
 
 import faker
 import networkx as nx
@@ -136,12 +136,14 @@ class DatabaseFactory:
         if hasattr(self, "transaction") and not self.transaction is None:
             self.transaction.commit()
         self.transaction = None
+        self.registry.reset_usage_stats(db_id=self.id)
 
     def rollback(self):
         self.uncommitted = 0
         if hasattr(self, "transaction") and not self.transaction is None:
             self.transaction.rollback()
         self.transaction = None
+        self.registry.reset_usage_stats(db_id=self.id)
 
     def setup_logging(self):
         logger = logging.getLogger("sqlalchemy")
@@ -295,13 +297,17 @@ class DatabaseFactory:
         with self.engine.connect() as conn:
             result = conn.execute(sql_text(query)).fetchall()
             rows = {
-                row.name: {"name": row.name, "total": row.total, "new": 0}
+                row.name: {
+                    "table_name": row.name,
+                    "total_rows": row.total,
+                    "new_rows": 0,
+                }
                 for row in result
             }
 
         new_rows = self.registry.get_usage_stats(self.id)
         for row in new_rows:
-            rows[row.table_name]["new"] = row.rows
+            rows[row.table_name]["new_rows"] = row.new_rows
 
         return list(rows.values())
 
@@ -483,7 +489,7 @@ class DatabaseFactory:
             UsageStatSchema(
                 db_id=self.id,
                 table_name=table_name,
-                rows=len(entries),
+                new_rows=len(entries),
             )
         )
 
@@ -494,7 +500,7 @@ class ContextFactory:
     table: TableMetadata
     col_spec: ColumnSpec
     n: int
-    entries: dict[str, list[str]] | None = None
+    entries: dict[str, list[str | None]]
 
     @property
     def column(self) -> ColumnMetadata:
@@ -513,7 +519,9 @@ class GeneratorFactory:
     def __init__(self) -> None:
         self.faker = Faker()
 
-    def make(self, type: GType, context: ContextFactory) -> list[str | None]:
+    def make(self, type: GType | None, context: ContextFactory) -> list[str | None]:
+        if type is None:
+            return []
         make_fn = getattr(self, f"make_{type.value}", None)
         if make_fn is None or not callable(make_fn):
             raise ValueError(f"Unknown generator type: {type}")
@@ -527,8 +535,6 @@ class GeneratorFactory:
     def make_python(self, context: ContextFactory) -> list[str | None]:
         if not context.col_spec.generator:
             return []
-
-        assert context.entries
         try:
             tree = ast.parse(context.col_spec.generator)
 

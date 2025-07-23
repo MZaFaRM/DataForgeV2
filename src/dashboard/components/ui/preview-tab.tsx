@@ -1,7 +1,9 @@
+import { table } from "console"
 import { useEffect, useState } from "react"
-import { invokeInsertPacket } from "@/api/fill"
+import { invokeExportSqlPacket, invokeInsertSqlPacket } from "@/api/fill"
 import { Icon } from "@iconify/react"
 import { save } from "@tauri-apps/plugin-dialog"
+import { ta } from "date-fns/locale"
 
 import { cn } from "@/lib/utils"
 import {
@@ -54,7 +56,7 @@ export default function RenderPreview({
   function handleInsertPacket() {
     if (!tablePacket) return
     setLoading(true)
-    invokeInsertPacket(tablePacket)
+    invokeInsertSqlPacket(tablePacket)
       .then((res) => {
         setShowCheck(true)
         onInserted()
@@ -126,14 +128,38 @@ export default function RenderPreview({
   }, [tablePacket])
 
   async function handleSaveToFile() {
+    if (!tablePacket) return
+
+    const fileName = `${
+      tablePacket?.name || "unnamed_table"
+    }_insert_${new Date().toISOString().replace(/[:.]/g, "-")}.sql`
+
     const filePath = await save({
       filters: [
         {
-          name: "Sql",
+          name: fileName,
           extensions: ["sql"],
         },
       ],
     })
+    if (filePath) {
+      try {
+        setLoading(true)
+        await invokeExportSqlPacket(tablePacket, filePath)
+        setShowCheck(true)
+        setTimeout(() => {
+          setShowCheck(false)
+        }, 2000)
+      } catch (error) {
+        toast({
+          variant: "destructive",
+          title: "Error exporting SQL",
+          description: (error as Error).message || "Unknown error occurred",
+        })
+      } finally {
+        setLoading(false)
+      }
+    }
   }
 
   async function doRefresh() {
@@ -210,7 +236,7 @@ export default function RenderPreview({
                         <div className="max-w-full">
                           {entries[rowIndex][colIndex] !== null
                             ? entries[rowIndex][colIndex]
-                            : "[skip]"}
+                            : "NULL"}
                         </div>
                       </TableCell>
                     )

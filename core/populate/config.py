@@ -117,7 +117,10 @@ class DBFRegistry:
                 session.add(row)
             session.commit()
             
-    def reset_usage_stats(self, db_id: int | None):
+    def reset_usage_stats(self, db_id: int | None = None):
         with self.session() as session:
-            session.query(UsageStatModel).filter_by(db_id=db_id).delete()
+            if not db_id:
+                session.query(UsageStatModel).delete()
+            else:
+                session.query(UsageStatModel).filter_by(db_id=db_id).delete()
             session.commit()

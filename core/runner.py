@@ -250,7 +250,7 @@ class Runner:
         except Exception as e:
             return self._err(f"Failed to clear logs: {str(e)}")
 
-    def _handle_insert_packet(self, body: dict) -> dict:
+    def _handle_insert_sql_packet(self, body: dict) -> dict:
         try:
             if not body:
                 return self._err("missing params: packet.")
@@ -258,6 +258,16 @@ class Runner:
             return self._ok({"pending_writes": self.dbf.uncommitted})
         except Exception as e:
             return self._err(f"Error inserting packet: {str(e)}")
+
+    def _handle_export_sql_packet(self, body: dict) -> dict:
+        try:
+            if not body or "path" not in body:
+                return self._err("missing params: path.")
+            path = body.pop("path")
+            self.dbf.export_sql_packet(TablePacket(**body), path)
+            return self._ok(f"SQL packet exported to {path}")
+        except Exception as e:
+            return self._err(f"Error exporting SQL packet: {str(e)}")
 
     def _handle_set_commit_db(self, _: dict) -> dict:
         self.dbf.commit()

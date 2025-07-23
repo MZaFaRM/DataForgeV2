@@ -23,9 +23,16 @@ export function invokeLoadSpec(dbId: number, tableName: string) {
   })
 }
 
-export function invokeInsertPacket(packet: TablePacket) {
+export function invokeInsertSqlPacket(packet: TablePacket) {
   return invokeAndExtract<TablePacket, { pendingWrites: number }>({
-    kind: "insert_packet",
+    kind: "insert_sql_packet",
     body: packet,
+  })
+}
+
+export function invokeExportSqlPacket(packet: TablePacket, path: string) {
+  return invokeAndExtract<{ path: string } & TablePacket, string>({
+    kind: "export_sql_packet",
+    body: { ...packet, path: path },
   })
 }

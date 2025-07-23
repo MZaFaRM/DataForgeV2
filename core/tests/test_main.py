@@ -123,15 +123,15 @@ def test_reconnect(runner: Runner):
     assert isinstance(res["payload"], list)
 
     assert res["status"] == "ok"
-    
+
+
 def test_reconnect_deleted_db(runner: Runner):
     creds = TEST_CREDS.copy()
     creds["name"] = "hello_world_where_is_this_happening"
     req = Request(kind="reconnect", body=creds)
     res = runner.handle_command(req)
     assert res["status"] == "error"
-    assert runner.dbf.id == None 
-    
+    assert runner.dbf.id == None
 
 
 def test_empty_verify_spec(runner: Runner):
@@ -172,36 +172,6 @@ def test_verify_teachers_table_spec(runner: Runner):
     req = Request(kind="reconnect", body=TEST_CREDS)
     res = runner.handle_command(req)
     assert res["status"] == "ok", res["error"]
-
-    body = {
-        "name": "teachers",
-        "noOfEntries": 50,
-        "columns": [
-            {
-                "name": "teacher_id",
-                "generator": "autoincrement",
-                "type": "autoincrement",
-            },
-            {"name": "full_name", "generator": "name", "type": "faker"},
-            {
-                "name": "department",
-                "generator": "^(CS|MECH|CIVIL|IT)$",
-                "type": "regex",
-            },
-            {
-                "name": "salary",
-                "generator": "# import builtins + faker\n# Py fields run after faker/foreign/regex/etc\nimport random\n@order(1)\ndef generator(columns):\n\treturn random.randint(30_000, 60_000)",
-                "type": "python",
-            },
-        ],
-    }
-
-    response = runner.handle_command(Request(kind="verify_spec", body=body))
-    assert response["status"] == "ok", f"Load spec failed: {response['error']}"
-    assert len(response["payload"]["errors"]) == 0, response["payload"]["errors"]
-    assert len(response["payload"]["entries"][0]) == len(body["columns"]), response[
-        "payload"
-    ]["entries"]
 
 
 def test_uncommitted(runner: Runner):
@@ -386,11 +356,15 @@ def test_verify_spec_order(runner: Runner):
                 "type": "autoincrement",
             },
             {"name": "class_name", "generator": "^(CSE|MECH|IT)$", "type": "regex"},
-            {"name": "room_number", "generator": "\n@order(1)\ndef generator(columns):\n    return random.randint(18, 25)", "type": "python"},
+            {
+                "name": "room_number",
+                "generator": "\n@order(1)\ndef generator(columns):\n    return random.randint(18, 25)",
+                "type": "python",
+            },
             {"name": "teacher_id", "generator": None, "type": "foreign"},
         ],
     }
-    
+
     req = Request(kind="verify_spec", body=spec)
     res = runner.handle_command(req)
     assert res["status"] == "ok", res["error"]

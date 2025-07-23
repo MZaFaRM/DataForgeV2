@@ -40,6 +40,7 @@ from core.utils.types import (
     ColumnMetadata,
     ColumnSpec,
     DbCredsSchema,
+    ErrorPacket,
     ForeignKeyRef,
     UsageStatSchema,
 )
@@ -224,7 +225,7 @@ class DatabaseFactory:
         self.password = ""
         self.transaction = None
         self.uncommitted = 0
-        self.registry.reset_usage_stats(db_id=self.id)
+        self.registry.reset_usage_stats()
 
     def get_columns(self, table_name: str) -> list:
         """
@@ -515,26 +516,35 @@ class DatabaseFactory:
         table_name = packet.name
         if not packet.columns or not packet.entries:
             raise ValueError("Missing columns and/or entries.")
+        
+        def sql_literal(val: str | None) -> str:
+            if val is None or val.upper() == "NULL":
+                return "NULL"
+            return f"'{val.replace('\'', '\\\'')}'"
 
-        entries = [dict(zip(packet.columns, entry)) for entry in packet.entries]
+        sql = (
+            f"INSERT INTO `{table_name}` (\n"
+            f"  {', '.join(f'`{col}`' for col in packet.columns)}\n"
+            f") VALUES\n"
+            + ",\n".join(
+                f"  ({', '.join(sql_literal(item) for item in entry)})"
+                for entry in packet.entries
+            )
+            + ";"
+        )
 
-        sql = f"""
-            INSERT INTO `{table_name}` ({', '.join(packet.columns)})
-            VALUES ({', '.join([f':{col}' for col in packet.columns])})
-        """
         try:
             with self.engine.begin() as conn:
-                conn.execute(sql_text(sql), entries)
+                conn.execute(sql_text(sql))
                 raise ManualException("Force rollback for preview")
         except ManualException:
             pass
 
-        if os.path.exists(path):
-            with open(path, "a") as f:
-                f.write(
-                    f"\n-- Exported at {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n"
-                )
-                f.write(sql)
+        with open(path, "w") as f:
+            f.write(
+                f"\n-- Exported at {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n"
+            )
+            f.write(sql)
 
 
 @dataclass
@@ -543,6 +553,7 @@ class ContextFactory:
     table: TableMetadata
     col_spec: ColumnSpec
     n: int
+    errors: list[ErrorPacket]
     entries: dict[str, list[str | None]]
 
     @property

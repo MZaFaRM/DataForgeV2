@@ -323,6 +323,7 @@ export default function ConnectionSelector({
                   <CommandItem
                     key={conn.name}
                     className={cn(dbConnecting && "cursor-wait")}
+                    disabled={dbConnecting}
                     onSelect={() => {
                       handleDbCredsSelect(conn)
                     }}

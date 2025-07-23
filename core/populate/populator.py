@@ -229,7 +229,7 @@ class Populator:
 
         col_md = table.get_column(col_spec.name)
         assert col_md, f"Column {col_spec.name} not found in table {table.name}"
-        if col_md.unique:
+        if col_md.unique and context.col_spec.type != GType.null:
             filtered_rows = satisfy_unique(
                 filtered_rows,
                 is_computed=is_computed,

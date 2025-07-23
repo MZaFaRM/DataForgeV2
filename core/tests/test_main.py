@@ -148,8 +148,8 @@ def test_empty_verify_spec(runner: Runner):
                 "generator": "autoincrement",
                 "type": "autoincrement",
             },
-            {"name": "class_name", "generator": None, "type": "faker"},
-            {"name": "room_number", "generator": None, "type": "faker"},
+            {"name": "class_name", "generator": "null", "type": "null"},
+            {"name": "room_number", "generator": "null", "type": "null"},
             {
                 "name": "teacher_id",
                 "generator": "teachers__teacher_id",

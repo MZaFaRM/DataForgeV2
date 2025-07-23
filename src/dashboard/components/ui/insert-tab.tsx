@@ -109,10 +109,6 @@ function InsertTabRows({
   const thisGroup = column.multiUnique || []
   const inHovered = hoveredGroup?.includes(column.name)
 
-  useEffect(() => {
-    // console.log("ColumnSpec updated:", columnSpec)
-  }, [columnSpec])
-
   return (
     <TableRow
       onMouseEnter={() => {
@@ -264,6 +260,17 @@ function GeneratorTypeSelect({
             </SelectItem>
           </>
         )}
+        {column.nullable && (
+          <SelectItem value="null">
+            <div className="flex items-center">
+              <Icon
+                icon="pepicons-pop:no-entry"
+                className="mr-2 h-4 w-4 text-red-500"
+              />
+              NULL
+            </div>
+          </SelectItem>
+        )}
       </SelectContent>
     </Select>
   )
@@ -294,6 +301,8 @@ function RenderGenerator({
       setSelected("autoincrement")
     } else if (generatorType === "computed") {
       setSelected("computed")
+    } else if (generatorType === "null") {
+      setSelected("null")
     }
   }, [generatorType])
 

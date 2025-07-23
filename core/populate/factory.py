@@ -654,6 +654,9 @@ class GeneratorFactory:
 
     def make_computed(self, context: ContextFactory) -> list[str | None]:
         return [None for _ in range(context.n)]
+    
+    def make_null(self, context: ContextFactory) -> list[str | None]:
+        return [None for _ in range(context.n)]
 
     def _sample_values(
         self, n: int, gen_fn: Callable, col: ColumnMetadata
@@ -722,4 +725,7 @@ class GeneratorFactory:
         return True
 
     def check_computed(self, generator: str):
+        return True
+
+    def check_null(self, generator: str):
         return True

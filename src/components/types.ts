@@ -63,6 +63,7 @@ export type GeneratorType =
   | "autoincrement"
   | "computed"
   | "python"
+  | "null"
 
 export interface TableSpec {
   name: string

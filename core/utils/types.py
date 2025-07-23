@@ -12,6 +12,7 @@ class GeneratorType(str, enum.Enum):
     python = "python"
     autoincrement = "autoincrement"
     computed = "computed"
+    null = "null"
 
 
 class ForeignKeyRef(BaseModel):

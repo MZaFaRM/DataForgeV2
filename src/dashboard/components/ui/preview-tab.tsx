@@ -132,16 +132,17 @@ export default function RenderPreview({
 
     const fileName = `${
       tablePacket?.name || "unnamed_table"
-    }_insert_${new Date().toISOString().replace(/[:.]/g, "-")}.sql`
+    }_${new Date().toISOString().replace(/[:.]/g, "-")}.sql`
 
     const filePath = await save({
+      defaultPath: fileName,
       filters: [
         {
-          name: fileName,
+          name: "SQL File",
           extensions: ["sql"],
         },
       ],
-    })
+    })  
     if (filePath) {
       try {
         setLoading(true)
@@ -187,65 +188,78 @@ export default function RenderPreview({
   }
 
   return (
-    <div className={cn("flex min-h-full flex-col", loading && "cursor-wait")}>
-      <Table className="flex-shrink-0">
-        <TableHeader>
-          <TableRow>
+    <div className={cn("flex h-full flex-col", loading && "cursor-wait")}>
+      {loading ? (
+        <div className="bg-current-foreground flex h-full flex-col items-center justify-center rounded-md bg-gradient-to-br text-gray-800">
+          <div className="mb-4 h-12 w-12 animate-spin rounded-full border-4 border-purple-500 border-t-transparent" />
+          <p className="text-base font-medium tracking-wide text-foreground">
+            Generating preview...
+          </p>
+          <p className="mt-1 text-sm font-medium text-muted-foreground">
+            Hang tight. This may take a few seconds.
+          </p>
+        </div>
+      ) : (
+        <Table className="flex-shrink-0">
+          <TableHeader>
+            <TableRow>
+              {tablePacket &&
+                tablePacket.columns.map((column) => (
+                  <TableHead
+                    title={
+                      (errorCols && errorCols[column]) ||
+                      (warnCols && warnCols[column])
+                    }
+                    key={column}
+                    className={cn(
+                      "bg-purple-400 text-center text-black",
+                      warnCols[column] && "bg-yellow-400",
+                      errorCols[column] && "bg-red-400"
+                    )}
+                  >
+                    {column}
+                  </TableHead>
+                ))}
+            </TableRow>
+          </TableHeader>
+          <TableBody>
             {tablePacket &&
-              tablePacket.columns.map((column) => (
-                <TableHead
-                  title={
-                    (errorCols && errorCols[column]) ||
-                    (warnCols && warnCols[column])
-                  }
-                  key={column}
-                  className={cn(
-                    "bg-purple-400 text-center text-black",
-                    warnCols[column] && "bg-yellow-400",
-                    errorCols[column] && "bg-red-400"
-                  )}
-                >
-                  {column}
-                </TableHead>
-              ))}
-          </TableRow>
-        </TableHeader>
-        <TableBody>
-          {tablePacket &&
-            (() => {
-              const columns = tablePacket.columns ?? []
-              const entries = tablePacket.entries ?? []
-              const rowCount = entries.length ?? 0
-              const colCount = entries[0]?.length || 0
-              const name = tablePacket.name
+              (() => {
+                const columns = tablePacket.columns ?? []
+                const entries = tablePacket.entries ?? []
+                const rowCount = entries.length ?? 0
+                const colCount = entries[0]?.length || 0
+                const name = tablePacket.name
 
-              return Array.from({ length: rowCount }).map((_, rowIndex) => (
-                <TableRow key={`${name}.${rowIndex}`}>
-                  {Array.from({ length: colCount }).map((_, colIndex) => {
-                    const columnName = columns[colIndex]
+                return Array.from({ length: rowCount }).map((_, rowIndex) => (
+                  <TableRow key={`${name}.${rowIndex}`}>
+                    {Array.from({ length: colCount }).map((_, colIndex) => {
+                      const columnName = columns[colIndex]
 
-                    return (
-                      <TableCell
-                        key={`${name}.${colIndex}.${rowIndex}`}
-                        className={cn(
-                          "w-[50px] whitespace-nowrap text-center",
-                          warnCols[columnName] && "bg-yellow-100/25",
-                          errorCols[columnName] && "bg-red-100/25"
-                        )}
-                      >
-                        <div className="max-w-full">
-                          {entries[rowIndex][colIndex] !== null
-                            ? entries[rowIndex][colIndex]
-                            : "NULL"}
-                        </div>
-                      </TableCell>
-                    )
-                  })}
-                </TableRow>
-              ))
-            })()}
-        </TableBody>
-      </Table>
+                      return (
+                        <TableCell
+                          key={`${name}.${colIndex}.${rowIndex}`}
+                          className={cn(
+                            "w-[50px] whitespace-nowrap text-center",
+                            warnCols[columnName] && "bg-yellow-100/25",
+                            errorCols[columnName] && "bg-red-100/25"
+                          )}
+                        >
+                          <div className="max-w-full">
+                            {entries[rowIndex][colIndex] !== null
+                              ? entries[rowIndex][colIndex]
+                              : "NULL"}
+                          </div>
+                        </TableCell>
+                      )
+                    })}
+                  </TableRow>
+                ))
+              })()}
+          </TableBody>
+        </Table>
+      )}
+
       <div className="sticky bottom-0 mt-auto flex items-center justify-center bg-muted p-2">
         <button
           className="inline-flex items-center space-x-2 rounded-md border px-3 py-2 text-sm font-medium hover:bg-accent hover:text-accent-foreground"

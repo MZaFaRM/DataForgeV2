@@ -9,6 +9,7 @@ use std::{
 
 use tauri::{Manager, State};
 
+use tauri_plugin_dialog;
 struct Bridge(std::process::Child);
 type Shared = Mutex<Option<Bridge>>;
 
@@ -30,6 +31,7 @@ fn send(payload: String, state: State<Shared>) -> Result<String, String> {
 fn main() {
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
+        .plugin(tauri_plugin_dialog::init())
         .setup(|app| {
             let exe =
                 std::env::current_exe()?

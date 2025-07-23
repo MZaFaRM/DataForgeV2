@@ -35,5 +35,6 @@
       "icons/icon.icns",
       "icons/icon.ico"
     ]
-  }
+  },
+  "plugins": { "permissions": ["dialog:default", "dialogue:allow-save"] }
 }

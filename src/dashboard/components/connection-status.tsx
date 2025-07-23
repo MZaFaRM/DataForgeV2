@@ -75,6 +75,7 @@ export default function ConnectionSelector({
   }, [dbCreds, dbList])
 
   useEffect(() => {
+    console.log("ID:", dbCreds?.id)
     handleListDbCreds()
     handleSavedDbCreds()
   }, [])
@@ -146,23 +147,22 @@ export default function ConnectionSelector({
       })
   }
 
-  function handleDbCredsSelect(creds: DBCreds) {
-    invokeDbReconnection(creds)
-      .then((data) => {
-        // console.log("Reconnected to the database:", creds)
-        setDbCreds({ ...creds })
-        setOpen(false)
-        setNewDbCreds(null)
-      })
-      .catch((error) => {
-        console.error("Error reconnecting to the database:", error)
-        setDbCreds(null)
-        setNewDbCreds((prev) => ({
-          ...prev!,
-          error: handleErrorField(error?.message || String(error)),
-        }))
-      })
-    handleSavedDbCreds()
+  async function handleDbCredsSelect(creds: DBCreds) {
+    setDbConnecting(true)
+    setDbCreds({ ...creds, id: undefined })
+    console.log(creds)
+    try {
+      const data = await invokeDbReconnection(creds)
+      // console.log("Reconnected to the database:", creds)
+      setDbCreds(data)
+      setOpen(false)
+      setNewDbCreds(null)
+    } catch (error) {
+      console.error("Error reconnecting to the database:", error)
+    } finally {
+      setDbConnecting(false)
+      handleSavedDbCreds()
+    }
   }
 
   function handleDbCredsRemove(creds: DBCreds) {
@@ -239,14 +239,19 @@ export default function ConnectionSelector({
               variant="outline"
               role="combobox"
               aria-expanded={open}
-              className="w-[200px]"
+              className={cn("w-[200px]", dbConnecting && "cursor-wait")}
             >
               {dbCreds?.name ? (
                 <>
-                  <div>
+                  <div className={cn(dbConnecting && "cursor-wait")}>
                     <Icon
                       icon="ix:circle-dot"
-                      className="mr-2 h-4 w-4 animate-pulse text-green-500"
+                      className={cn(
+                        "mr-2 h-4 w-4",
+                        dbCreds.id
+                          ? "animate-pulse text-green-500"
+                          : "text-red-500"
+                      )}
                     />
                   </div>
                   <div className="truncate">
@@ -317,6 +322,7 @@ export default function ConnectionSelector({
                 {dbList.map((conn) => (
                   <CommandItem
                     key={conn.name}
+                    className={cn(dbConnecting && "cursor-wait")}
                     onSelect={() => {
                       handleDbCredsSelect(conn)
                     }}

@@ -102,20 +102,23 @@ class Runner:
             )
             return self._err(msg)
 
-        self.dbf = DatabaseFactory()
-        if schema := self.dbf.exists(
+        self.dbf.disconnect()
+        if saved := self.dbf.registry.exists(
             name=creds["name"],
             user=creds["user"],
             host=creds["host"],
             port=creds["port"],
         ):
-            self.dbf = DatabaseFactory()
-            self.dbf.from_schema(schema)
-            self.dbf.test_connection()
+            self.dbf.from_schema(saved)
         else:
-            self.dbf = DatabaseFactory()
             self.dbf.from_dict(creds)
+        try:
             self.dbf.test_connection()
+        except Exception as e:
+            self.dbf.disconnect()
+            return self._err(str(e))
+
+        if not saved:
             self.dbf.save()
 
         return self._ok(self.dbf.to_dict())
@@ -130,16 +133,20 @@ class Runner:
         if None in (name, host, port, user):
             return self._err("Requires name, host and port to reconnect")
 
-        if schema := self.dbf.exists(
+        self.dbf.disconnect()
+        if schema := self.dbf.registry.exists(
             name=creds["name"],
             user=creds["user"],
             host=creds["host"],
             port=creds["port"],
         ):
-            self.dbf = DatabaseFactory()
             self.dbf.from_schema(schema)
-            self.dbf.test_connection()
-            return self._ok(self.dbf.to_dict())
+            try:
+                self.dbf.test_connection()
+                return self._ok(self.dbf.to_dict())
+            except Exception as e:
+                self.dbf.disconnect()
+                return self._err(str(e))
 
         return self._err("Unknown database.")
 
@@ -156,16 +163,17 @@ class Runner:
         if name is None or host is None or port is None or user is None:
             return self._err("Requires name, host and port to delete connection")
 
+        self.dbf.disconnect()
         self.dbf.registry.delete_cred(name=name, host=host, port=port, user=user)
         return self._ok("Connection deleted successfully.")
 
     def _handle_disconnect(self, _=None) -> dict:
-        self.dbf = DatabaseFactory()
+        self.dbf.disconnect()
         return self._ok("Disconnected successfully.")
 
     def _handle_tables(self, _=None) -> dict:
         table_info = {"table_data": {}, "sorted_tables": []}
-
+        _ = self.dbf.engine
         t1 = threading.Thread(
             target=lambda: table_info.update(table_data=self.dbf.get_tables())
         )
@@ -246,7 +254,7 @@ class Runner:
         try:
             if not body:
                 return self._err("missing params: packet.")
-            self.dbf.insert_packet(TablePacket(**body))
+            self.dbf.insert_sql_packet(TablePacket(**body))
             return self._ok({"pending_writes": self.dbf.uncommitted})
         except Exception as e:
             return self._err(f"Error inserting packet: {str(e)}")

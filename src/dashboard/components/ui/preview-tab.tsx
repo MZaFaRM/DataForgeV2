@@ -129,8 +129,8 @@ export default function RenderPreview({
     const filePath = await save({
       filters: [
         {
-          name: "Image",
-          extensions: ["png", "jpeg"],
+          name: "Sql",
+          extensions: ["sql"],
         },
       ],
     })

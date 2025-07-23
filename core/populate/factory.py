@@ -17,6 +17,7 @@ from typing import Any, Callable, Literal
 
 import faker
 import networkx as nx
+from pymysql import OperationalError
 import rstr
 from faker import Faker
 from networkx import Graph
@@ -30,6 +31,7 @@ from core.helpers import cap_numeric, cap_string
 from core.populate.config import DBFRegistry
 from core.settings import LOG_PATH
 from core.utils.exceptions import (
+    ManualException,
     MissingRequiredAttributeError,
     ValidationWarning,
     VerificationError,
@@ -100,7 +102,7 @@ class DatabaseFactory:
 
     @property
     def url(self) -> str:
-        if not hasattr(self, "_url"):
+        if not hasattr(self, "_url") or self._url == "":
             if self.user and self.password and self.host and self.port and self.name:
                 self._url = f"mysql+pymysql://{quote_plus(self.user)}:{quote_plus(self.password)}@{self.host}:{self.port}/{quote_plus(self.name)}"
             else:
@@ -111,7 +113,7 @@ class DatabaseFactory:
 
     @property
     def engine(self) -> Engine:
-        if not hasattr(self, "_engine"):
+        if not hasattr(self, "_engine") or self._engine is None:
             self.setup_logging()
             self._engine = create_engine(self.url, echo=False)
         return self._engine
@@ -122,7 +124,7 @@ class DatabaseFactory:
 
     @property
     def connection(self) -> Connection:
-        if not hasattr(self, "_connection"):
+        if not hasattr(self, "_connection") or self._connection is None:
             self._connection = self.engine.connect()
         return self._connection
 
@@ -197,16 +199,32 @@ class DatabaseFactory:
         )
         self.id = pk
 
-    def exists(
-        self, name: str, host: str, port: str, user: str
-    ) -> DbCredsSchema | None:
-        creds = self.registry.load_cred(name=name, host=host, port=port, user=user)
-        return creds
-
-    def test_connection(self) -> bool:
+    def test_connection(self):
         with self.engine.connect() as connection:
             connection.execute(sql_text("SELECT 1"))
-        return True
+
+    def disconnect(self):
+        if hasattr(self, "_connection") and self._connection:
+            self._connection.close()
+            self._connection = None
+        if hasattr(self, "_engine") and self._engine:
+            self._engine.dispose()
+            self._engine = None
+        if hasattr(self, "_url") and self._url:
+            self._url = ""
+        if hasattr(self, "transaction") and self.transaction:
+            self.transaction.rollback()
+            self.transaction = None
+
+        self.id = None
+        self.name = ""
+        self.host = ""
+        self.user = ""
+        self.port = ""
+        self.password = ""
+        self.transaction = None
+        self.uncommitted = 0
+        self.registry.reset_usage_stats(db_id=self.id)
 
     def get_columns(self, table_name: str) -> list:
         """
@@ -466,7 +484,7 @@ class DatabaseFactory:
         except Empty:
             return ["ERROR 408 (HYT00): No output returned"]
 
-    def insert_packet(self, packet: TablePacket):
+    def insert_sql_packet(self, packet: TablePacket):
         table_name = packet.name
         if not packet.columns or not packet.entries:
             raise ValueError("Missing columns and/or entries.")
@@ -492,6 +510,31 @@ class DatabaseFactory:
                 new_rows=len(entries),
             )
         )
+
+    def export_sql_packet(self, packet, path: str):
+        table_name = packet.name
+        if not packet.columns or not packet.entries:
+            raise ValueError("Missing columns and/or entries.")
+
+        entries = [dict(zip(packet.columns, entry)) for entry in packet.entries]
+
+        sql = f"""
+            INSERT INTO `{table_name}` ({', '.join(packet.columns)})
+            VALUES ({', '.join([f':{col}' for col in packet.columns])})
+        """
+        try:
+            with self.engine.begin() as conn:
+                conn.execute(sql_text(sql), entries)
+                raise ManualException("Force rollback for preview")
+        except ManualException:
+            pass
+
+        if os.path.exists(path):
+            with open(path, "a") as f:
+                f.write(
+                    f"\n-- Exported at {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n"
+                )
+                f.write(sql)
 
 
 @dataclass

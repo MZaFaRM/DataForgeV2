@@ -123,6 +123,15 @@ def test_reconnect(runner: Runner):
     assert isinstance(res["payload"], list)
 
     assert res["status"] == "ok"
+    
+def test_reconnect_deleted_db(runner: Runner):
+    creds = TEST_CREDS.copy()
+    creds["name"] = "hello_world_where_is_this_happening"
+    req = Request(kind="reconnect", body=creds)
+    res = runner.handle_command(req)
+    assert res["status"] == "error"
+    assert runner.dbf.id == None 
+    
 
 
 def test_empty_verify_spec(runner: Runner):

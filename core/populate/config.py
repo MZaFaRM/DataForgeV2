@@ -30,7 +30,7 @@ class DBFRegistry:
             session.commit()
             return schema.id
 
-    def load_cred(
+    def exists(
         self, name: str, host: str, port: str, user: str
     ) -> Optional[DbCredsSchema]:
         with self.session() as session:

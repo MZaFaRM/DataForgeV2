@@ -1,88 +1,95 @@
-import { DBCreds, SqlLog, TableEntry, TableMetadata, UsageInfo } from "@/components/types"
+import {
+  DBCreds,
+  SqlLog,
+  TableEntry,
+  TableMetadata,
+  UsageInfo,
+} from "@/components/types"
 
-import { invokeAndExtract } from "./cli"
+import { invokeCliRequest } from "./cli"
 
 export function invokeDbInfo() {
-  return invokeAndExtract<void, DBCreds>({ kind: "get_info_db" })
+  return invokeCliRequest<void, DBCreds>({ kind: "get_db_info" })
 }
 
 export function invokeDbConnection(dbCreds: DBCreds) {
-  return invokeAndExtract<DBCreds, DBCreds>({ kind: "connect", body: dbCreds })
+  return invokeCliRequest<DBCreds, DBCreds>({
+    kind: "set_db_connect",
+    body: dbCreds,
+  })
 }
 
 export function invokeDbDisconnect() {
-  return invokeAndExtract<void, string>({ kind: "disconnect" })
+  return invokeCliRequest<void, string>({ kind: "set_db_disconnect" })
 }
 
 export function invokeListDbCreds() {
-  return invokeAndExtract<void, DBCreds[]>({ kind: "list_connections" })
+  return invokeCliRequest<void, DBCreds[]>({ kind: "get_pref_connections" })
 }
 
 export function invokeDbDeletion(dbCreds: DBCreds) {
-  return invokeAndExtract<DBCreds, string>({
-    kind: "delete_connection",
+  return invokeCliRequest<DBCreds, string>({
+    kind: "set_pref_delete",
     body: dbCreds,
   })
 }
 
 export function invokeDbReconnection(dbCreds: DBCreds) {
-  return invokeAndExtract<DBCreds, DBCreds>({
-    kind: "reconnect",
+  return invokeCliRequest<DBCreds, DBCreds>({
+    kind: "set_db_reconnect",
     body: dbCreds,
   })
 }
 
 export function invokeGetTables() {
-  return invokeAndExtract<void, TableEntry[]>({ kind: "tables" })
+  return invokeCliRequest<void, TableEntry[]>({ kind: "get_db_tables" })
 }
 
 export function invokeTableData(table: string) {
-  return invokeAndExtract<{ name: string }, TableMetadata>({
-    kind: "table_metadata",
+  return invokeCliRequest<{ name: string }, TableMetadata>({
+    kind: "get_db_table",
     body: { name: table },
   })
 }
 
 export function invokeGetLogs(lines: number = 200) {
-  return invokeAndExtract<{ lines: number }, string[]>({
-    kind: "get_logs",
+  return invokeCliRequest<{ lines: number }, string[]>({
+    kind: "get_logs_read",
     body: { lines },
   })
 }
 
 export function invokeClearLogs() {
-  return invokeAndExtract<void, []>({ kind: "clear_logs" })
+  return invokeCliRequest<void, []>({ kind: "set_logs_clear" })
 }
 
 export function invokeRunSql(sql: string) {
-  return invokeAndExtract<{ sql: string }, string[]>({
-    kind: "run_sql",
+  return invokeCliRequest<{ sql: string }, string[]>({
+    kind: "run_sql_query",
     body: { sql: sql },
   })
 }
 
 export function invokeGetSqlBanner() {
-  return invokeAndExtract<void, SqlLog>({
-    kind: "get_banner_sql",
+  return invokeCliRequest<void, SqlLog>({
+    kind: "get_sql_banner",
   })
 }
 
 export function invokeDbCommit() {
-  return invokeAndExtract<void, string>({ kind: "set_commit_db" })
+  return invokeCliRequest<void, string>({ kind: "set_db_commit" })
 }
 
 export function invokeDbRollback() {
-  return invokeAndExtract<void, string>({ kind: "set_rollback_db" })
+  return invokeCliRequest<void, string>({ kind: "set_db_rollback" })
 }
 
 export function invokeDbGetUncommitted() {
-  return invokeAndExtract<void, number>({ kind: "get_uncommitted_db" })
+  return invokeCliRequest<void, number>({ kind: "get_uncommitted_db" })
 }
 
 export function invokeGetRowsConfig() {
-return invokeAndExtract<void, UsageInfo[]>(
-    {
-      kind: "get_rows_config",
-    }
-  )
+  return invokeCliRequest<void, UsageInfo[]>({
+    kind: "get_pref_rows",
+  })
 }

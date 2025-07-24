@@ -36,89 +36,95 @@ def test_handle_unknown_command(runner: Runner):
     assert "Unknown command" in res["error"]
 
 
-def test_handle_connect_missing_params(runner: Runner):
-    req = Request(kind="connect", body={})
+def test_handle_set_db_connect_missing_params(runner: Runner):
+    req = Request(kind="set_db_connect", body={})
     res = runner.handle_command(req)
     assert res["status"] == "error"
-    assert "Missing required connection" in res["error"]
 
 
 def test_connect_success(runner: Runner):
     creds = TEST_CREDS.copy()
     creds["password"] = "1234567890"
-    req = Request(kind="connect", body=creds)
+    req = Request(kind="set_db_connect", body=creds)
     res = runner.handle_command(req)
     assert res["status"] == "ok", res["error"]
 
 
-def test_run_sql_create_insert_select(runner: Runner):
-    res = runner.handle_command(Request(kind="reconnect", body=TEST_CREDS))
+def test_get_db_info(runner: Runner):
+    res = runner.handle_command(Request(kind="set_db_reconnect", body=TEST_CREDS))
+    assert res["status"] == "ok", res["error"]
+    res = runner.handle_command(Request(kind="get_db_info"))
+    assert res["status"] == "ok", res["error"]
+
+
+def test_run_sql_query(runner: Runner):
+    res = runner.handle_command(Request(kind="set_db_reconnect", body=TEST_CREDS))
     assert res["status"] == "ok", res["error"]
     res = runner.handle_command(
-        Request(kind="run_sql", body={"sql": "SELECT * FROM students"})
+        Request(kind="run_sql_query", body={"sql": "SELECT * FROM students"})
     )
     assert res["status"] == "ok"
 
 
-def test_table_metadata(runner: Runner):
-    res = runner.handle_command(Request(kind="reconnect", body=TEST_CREDS))
+def test_get_db_table(runner: Runner):
+    res = runner.handle_command(Request(kind="set_db_reconnect", body=TEST_CREDS))
     assert res["status"] == "ok", "Error connecting to database"
-    req = Request(kind="table_metadata", body={"name": "students"})
+    req = Request(kind="get_db_table", body={"name": "students"})
     res = runner.handle_command(req)
     assert res["status"] == "ok", "Error fetching table metadata"
     assert "columns" in res["payload"]
 
 
-def test_get_logs(runner: Runner):
-    res = runner.handle_command(Request(kind="get_logs", body={"lines": 10}))
+def test_get_logs_read(runner: Runner):
+    res = runner.handle_command(Request(kind="get_logs_read", body={"lines": 10}))
     assert res["status"] == "ok", "Error fetching logs"
     assert isinstance(res["payload"], list)
 
 
 def test_disconnect(runner: Runner):
-    req = Request(kind="reconnect", body=TEST_CREDS)
+    req = Request(kind="set_db_reconnect", body=TEST_CREDS)
     res = runner.handle_command(req)
     assert res["status"] == "ok", "Error connecting to database"
 
-    disc = runner.handle_command(Request(kind="disconnect", body={}))
+    disc = runner.handle_command(Request(kind="set_db_disconnect", body={}))
     assert disc["status"] == "ok", "Error disconnecting from database"
 
 
-def test_list_connections(runner: Runner):
-    req = Request(kind="reconnect", body=TEST_CREDS)
+def test_get_pref_connections(runner: Runner):
+    req = Request(kind="set_db_reconnect", body=TEST_CREDS)
     res = runner.handle_command(req)
     assert res["status"] == "ok", "Error connecting to database"
 
-    res = runner.handle_command(Request(kind="list_connections", body={}))
+    res = runner.handle_command(Request(kind="get_pref_connections", body={}))
     assert res["status"] == "ok", res["error"]
     assert isinstance(res["payload"], list)
 
 
-def test_get_faker_gen(runner: Runner):
-    res = runner.handle_command(Request(kind="get_faker_gen", body={}))
+def test_get_gen_methods(runner: Runner):
+    res = runner.handle_command(Request(kind="get_gen_methods", body={}))
     assert res["status"] == "ok", res["error"]
     assert isinstance(res["payload"], list)
 
 
 def test_tables_command(runner: Runner):
-    req = Request(kind="reconnect", body=TEST_CREDS)
+    req = Request(kind="set_db_reconnect", body=TEST_CREDS)
     res = runner.handle_command(req)
     assert res["status"] == "ok", "Error connecting to database"
 
-    res = runner.handle_command(Request(kind="tables", body={}))
+    res = runner.handle_command(Request(kind="get_db_tables", body={}))
     assert res["status"] == "ok", "Error fetching tables"
     assert isinstance(res["payload"], list)
 
 
-def test_reconnect(runner: Runner):
+def test_set_db_reconnect(runner: Runner):
     creds = TEST_CREDS.copy()
     creds.pop("password", None)
 
-    req = Request(kind="reconnect", body=creds)
+    req = Request(kind="set_db_reconnect", body=creds)
     res = runner.handle_command(req)
     assert res["status"] == "ok", f"Reconnect failed, Req: {req}, Res: {res}"
 
-    res = runner.handle_command(Request(kind="tables", body={}))
+    res = runner.handle_command(Request(kind="get_db_tables", body={}))
     assert res["status"] == "ok", "Error fetching tables after reconnect"
     assert isinstance(res["payload"], list)
 
@@ -128,14 +134,17 @@ def test_reconnect(runner: Runner):
 def test_reconnect_deleted_db(runner: Runner):
     creds = TEST_CREDS.copy()
     creds["name"] = "hello_world_where_is_this_happening"
-    req = Request(kind="reconnect", body=creds)
+    req = Request(kind="set_db_reconnect", body=creds)
     res = runner.handle_command(req)
     assert res["status"] == "error"
-    assert runner.dbf.id == None
+
+    req = Request(kind="get_db_info", body={})
+    res = runner.handle_command(req)
+    assert res["status"] == "error", res["error"]
 
 
-def test_empty_verify_spec(runner: Runner):
-    req = Request(kind="reconnect", body=TEST_CREDS)
+def test_empty_get_gen_packets(runner: Runner):
+    req = Request(kind="set_db_reconnect", body=TEST_CREDS)
     res = runner.handle_command(req)
     assert res["status"] == "ok", res["error"]
 
@@ -157,35 +166,33 @@ def test_empty_verify_spec(runner: Runner):
             },
         ],
     }
-    response = runner.handle_command(Request(kind="verify_spec", body=body))
+    response = runner.handle_command(Request(kind="get_gen_packets", body=body))
     assert response["status"] == "ok", f"Load spec failed: {response['error']}"
     assert tuple(response["payload"]["entries"][0][:3]) == (
         None,
-        "",
-        "",
-    ), response[
-        "payload"
-    ]["entries"][0][:3]
+        None,
+        None,
+    ), response["payload"]["entries"][0][:3]
 
 
 def test_verify_teachers_table_spec(runner: Runner):
-    req = Request(kind="reconnect", body=TEST_CREDS)
+    req = Request(kind="set_db_reconnect", body=TEST_CREDS)
     res = runner.handle_command(req)
     assert res["status"] == "ok", res["error"]
 
 
 def test_uncommitted(runner: Runner):
-    req = Request(kind="reconnect", body=TEST_CREDS)
+    req = Request(kind="set_db_reconnect", body=TEST_CREDS)
     res = runner.handle_command(req)
     assert res["status"] == "ok", res["error"]
 
-    body = {"dbId": 1, "tableName": "teachers"}
-    response = runner.handle_command(Request(kind="load_spec", body=body))
+    body = {"dbId": 1, "name": "teachers"}
+    response = runner.handle_command(Request(kind="get_pref_spec", body=body))
     assert response["status"] == "ok", f"Load spec failed: {response['error']}"
 
     for i in range(1, 4):
         load_res = runner.handle_command(
-            Request(kind="verify_spec", body=response["payload"])
+            Request(kind="get_gen_packets", body=response["payload"])
         )
         assert load_res["status"] == "ok", load_res["error"]
 
@@ -195,22 +202,22 @@ def test_uncommitted(runner: Runner):
         assert insert_res["status"] == "ok", insert_res["error"]
         assert insert_res["payload"]["pending_writes"] == i
 
-    commit_res = runner.handle_command(Request(kind="set_rollback_db", body={}))
+    commit_res = runner.handle_command(Request(kind="set_db_rollback", body={}))
     assert commit_res["status"] == "ok", commit_res["error"]
     assert runner.dbf.uncommitted == 0
 
 
 def test_commit_and_rollback(runner: Runner):
-    req = Request(kind="reconnect", body=TEST_CREDS)
+    req = Request(kind="set_db_reconnect", body=TEST_CREDS)
     res = runner.handle_command(req)
     assert res["status"] == "ok", res["error"]
 
     body = {"dbId": 1, "tableName": "teachers"}
-    response = runner.handle_command(Request(kind="load_spec", body=body))
+    response = runner.handle_command(Request(kind="get_pref_spec", body=body))
     assert response["status"] == "ok", f"Load spec failed: {response['error']}"
 
     load_res = runner.handle_command(
-        Request(kind="verify_spec", body=response["payload"])
+        Request(kind="get_gen_packets", body=response["payload"])
     )
     assert load_res["status"] == "ok", load_res["error"]
 
@@ -219,7 +226,7 @@ def test_commit_and_rollback(runner: Runner):
     )
     assert insert_res["status"] == "ok", insert_res["error"]
 
-    commit_res = runner.handle_command(Request(kind="set_rollback_db", body={}))
+    commit_res = runner.handle_command(Request(kind="set_db_rollback", body={}))
     assert commit_res["status"] == "ok", commit_res["error"]
 
     insert_res = runner.handle_command(
@@ -227,17 +234,17 @@ def test_commit_and_rollback(runner: Runner):
     )
     assert insert_res["status"] == "ok", insert_res["error"]
 
-    commit_res = runner.handle_command(Request(kind="set_commit_db", body={}))
+    commit_res = runner.handle_command(Request(kind="set_db_commit", body={}))
     assert commit_res["status"] == "ok", commit_res["error"]
 
     runner.handle_command(
-        Request(kind="run_sql", body={"sql": "DELETE FROM teachers LIMIT 50;"})
+        Request(kind="run_sql_query", body={"sql": "DELETE FROM teachers LIMIT 50;"})
     )
     assert commit_res["status"] == "ok", commit_res["error"]
 
 
 # def test_insert_packet(runner: Runner):
-#     req = Request(kind="reconnect", body=TEST_CREDS)
+#     req = Request(kind="set_db_reconnect", body=TEST_CREDS)
 #     res = runner.handle_command(req)
 #     assert res["status"] == "ok", res["error"]
 
@@ -302,25 +309,25 @@ def test_commit_and_rollback(runner: Runner):
 #     assert response["status"] == "ok", response["error"]
 
 
-def test_get_rows_config(runner: Runner):
-    req = Request(kind="reconnect", body=TEST_CREDS)
+def test_get_pref_rows(runner: Runner):
+    req = Request(kind="set_db_reconnect", body=TEST_CREDS)
     res = runner.handle_command(req)
     assert res["status"] == "ok", res["error"]
 
-    # Run get_rows_config
-    res = runner.handle_command(Request(kind="get_rows_config", body=None))
-    assert res["status"] == "ok", f"get_rows_config failed: {res['error']}"
+    # Run get_pref_rows
+    res = runner.handle_command(Request(kind="get_pref_rows", body=None))
+    assert res["status"] == "ok", f"get_pref_rows failed: {res['error']}"
     prior = next(
         (table for table in res["payload"] if table["table_name"] == "teachers"), {}
     )["new_rows"]
 
     # Insert data
     body = {"dbId": 1, "tableName": "teachers"}
-    response = runner.handle_command(Request(kind="load_spec", body=body))
+    response = runner.handle_command(Request(kind="get_pref_spec", body=body))
     assert response["status"] == "ok", f"Load spec failed: {response['error']}"
 
     packets = runner.handle_command(
-        Request(kind="verify_spec", body=response["payload"])
+        Request(kind="get_gen_packets", body=response["payload"])
     )
     assert packets["status"] == "ok", packets["error"]
 
@@ -329,9 +336,9 @@ def test_get_rows_config(runner: Runner):
     )
     assert insert_res["status"] == "ok", insert_res["error"]
 
-    # Run get_rows_config again
-    res = runner.handle_command(Request(kind="get_rows_config", body=None))
-    assert res["status"] == "ok", f"get_rows_config failed: {res['error']}"
+    # Run get_pref_rows again
+    res = runner.handle_command(Request(kind="get_pref_rows", body=None))
+    assert res["status"] == "ok", f"get_pref_rows failed: {res['error']}"
     after = next(
         (table for table in res["payload"] if table["table_name"] == "teachers"), {}
     )["new_rows"]
@@ -341,8 +348,8 @@ def test_get_rows_config(runner: Runner):
     ), f"{after} != {prior} + {len(packets['payload']['entries'])}"
 
 
-def test_verify_spec_order(runner: Runner):
-    req = Request(kind="reconnect", body=TEST_CREDS)
+def test_get_gen_packets_order(runner: Runner):
+    req = Request(kind="set_db_reconnect", body=TEST_CREDS)
     res = runner.handle_command(req)
     assert res["status"] == "ok", res["error"]
 
@@ -365,6 +372,6 @@ def test_verify_spec_order(runner: Runner):
         ],
     }
 
-    req = Request(kind="verify_spec", body=spec)
+    req = Request(kind="get_gen_packets", body=spec)
     res = runner.handle_command(req)
     assert res["status"] == "ok", res["error"]

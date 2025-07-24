@@ -13,15 +13,10 @@ export default function DashboardPage() {
   const [activeTable, setActiveTable] = useState<string | null>(null)
   const [usageInfo, setUsageInfo] = useState<UsageInfo[]>([])
 
-  useEffect(() => {
-    fetchUsageInfo()
-  }, [dbCreds])
-
   async function fetchUsageInfo() {
     try {
       const info = await invokeGetRowsConfig()
       setUsageInfo(info)
-      console.log("Usage Info:", info)
     } catch (error) {
       console.error("Error fetching usage info:", error)
       setUsageInfo([])
@@ -51,7 +46,13 @@ export default function DashboardPage() {
                 would mean a lot.
               </p>
             </div>
-            <ConnectionStatus dbCreds={dbCreds} setDbCreds={setDbCreds} />
+            <ConnectionStatus
+              dbCreds={dbCreds}
+              updateDb={(val) => {
+                setDbCreds(val)
+                fetchUsageInfo()
+              }}
+            />
           </div>
           <div className="flex flex-row space-y-4">
             <ListTables

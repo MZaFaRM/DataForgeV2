@@ -61,7 +61,7 @@ export default function InsertTab({
     <div className="flex h-full w-full flex-col overflow-auto">
       <Table className="w-full flex-1">
         <TableBody>
-          {tableData.columns.map((column) => (
+          {tableData?.columns?.map((column) => (
             <InsertTabRows
               key={`${tableData.name}-${column.name}`}
               column={column}

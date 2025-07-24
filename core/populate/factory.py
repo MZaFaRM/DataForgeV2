@@ -3,6 +3,7 @@ from datetime import datetime
 import logging
 import math
 from multiprocessing import Process, Queue
+import multiprocessing
 import os
 import platform
 from queue import Empty
@@ -27,7 +28,7 @@ from sqlalchemy.engine import Engine, Inspector
 from sqlalchemy.engine.reflection import Inspector
 from tabulate import tabulate
 
-from core.helpers import cap_numeric, cap_string
+from core.helpers import cap_numeric, cap_string, safe_eval
 from core.populate.config import DBFRegistry
 from core.settings import LOG_PATH
 from core.utils.exceptions import (
@@ -51,7 +52,6 @@ from urllib.parse import quote_plus
 
 class DatabaseFactory:
     def __init__(self):
-        self.id = None
         self.host = ""
         self.user = ""
         self.port = ""
@@ -62,7 +62,7 @@ class DatabaseFactory:
 
     def to_dict(self) -> dict:
         return {
-            "id": self.id,
+            "id": getattr(self, "_id", None),
             "host": self.host,
             "user": self.user,
             "port": str(self.port),
@@ -70,7 +70,7 @@ class DatabaseFactory:
         }
 
     def from_dict(self, data: dict):
-        if self.id != None:
+        if getattr(self, "_id", None) is not None:
             raise ValueError(
                 "Already connected to a database. Please create a new instance."
             )
@@ -82,7 +82,7 @@ class DatabaseFactory:
 
     def to_schema(self) -> DbCredsSchema:
         return DbCredsSchema(
-            id=self.id,
+            id=getattr(self, "_id", None),
             name=self.name,
             host=self.host,
             port=self.port,
@@ -91,7 +91,7 @@ class DatabaseFactory:
         )
 
     def from_schema(self, schema: DbCredsSchema) -> None:
-        if self.id != None:
+        if getattr(self, "_id", None) is not None:
             raise ValueError(
                 "Already connected to a database. Please create a new instance."
             )
@@ -100,6 +100,9 @@ class DatabaseFactory:
             if not hasattr(schema, key):
                 raise ValueError(f"Missing required key: {key}")
             setattr(self, key, getattr(schema, key, None))
+            
+        if hasattr(schema, "id"):
+            self.id = schema.id
 
     @property
     def url(self) -> str:
@@ -111,6 +114,19 @@ class DatabaseFactory:
                     "Required arguments for url: user, password, host, port and name not set."
                 )
         return self._url
+    
+    @property
+    def id(self) -> int:
+        if not hasattr(self, "_id") or self._id is None:
+            raise AttributeError("Not connected to a database")
+        return self._id
+    
+    @id.setter
+    def id(self, value: int | None):
+        if isinstance(value, int):
+            self._id = value
+        elif value == None and hasattr(self, "_id"):
+                del self._id
 
     @property
     def engine(self) -> Engine:
@@ -301,9 +317,6 @@ class DatabaseFactory:
         return graph
 
     def get_database_rows(self) -> list[dict]:
-        if not self.id:
-            raise ValueError("Database ID is not set.")
-
         tables = self.inspector.get_table_names()
         rows = {}
 
@@ -485,7 +498,7 @@ class DatabaseFactory:
         except Empty:
             return ["ERROR 408 (HYT00): No output returned"]
 
-    def insert_sql_packet(self, packet: TablePacket):
+    def insert_packet(self, packet: TablePacket):
         table_name = packet.name
         if not packet.columns or not packet.entries:
             raise ValueError("Missing columns and/or entries.")
@@ -500,9 +513,6 @@ class DatabaseFactory:
         self.ensure_transaction()
         self.connection.execute(sql_text(sql), entries)
         self.uncommitted += 1
-
-        if self.id is None:
-            raise ValueError("Database ID is not set.")
 
         self.registry.save_usage_stat(
             UsageStatSchema(

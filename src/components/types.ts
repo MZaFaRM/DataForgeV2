@@ -1,3 +1,5 @@
+import { UUID } from "crypto"
+
 export type CliResponse<T> = Record<string, unknown> & {
   status: "ok" | "error"
   payload?: T
@@ -5,6 +7,7 @@ export type CliResponse<T> = Record<string, unknown> & {
 }
 
 export type CliRequest<T> = Record<string, unknown> & {
+  id?: string
   kind: string
   body?: T
 }
@@ -67,6 +70,7 @@ export type GeneratorType =
 
 export interface TableSpec {
   name: string
+  pageSize: number
   noOfEntries: number
   columns: ColumnSpec[]
 }
@@ -94,10 +98,16 @@ export interface ErrorPacket {
 export type ErrorPacketMap = Record<string, ErrorPacket[]>
 
 export interface TablePacket {
+  id: string
   name: string
   columns: string[]
   entries: (string | null)[][]
   errors: ErrorPacket[]
+
+  page: number
+  totalPages: number
+  totalEntries: number
+
 }
 
 export interface SqlLog {

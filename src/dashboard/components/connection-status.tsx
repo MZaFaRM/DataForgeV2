@@ -17,6 +17,7 @@ import {
 import {
   CaretSortIcon,
   CheckIcon,
+  ColumnSpacingIcon,
   PlusCircledIcon,
 } from "@radix-ui/react-icons"
 import { Eye, EyeOff } from "lucide-react"
@@ -55,12 +56,12 @@ import { DBCreds } from "@/components/types"
 
 interface ConnectionSelectorProps {
   dbCreds: DBCreds | null
-  setDbCreds: (info: DBCreds | null) => void
+  updateDb: (info: DBCreds | null) => void
 }
 
 export default function ConnectionSelector({
   dbCreds,
-  setDbCreds,
+  updateDb,
 }: ConnectionSelectorProps) {
   const [showDialog, setShowDialog] = useState(false)
   const [open, setOpen] = useState(false)
@@ -69,10 +70,6 @@ export default function ConnectionSelector({
   const [errorField, setErrorField] = useState<string | null>(null)
   const [showPassword, setShowPassword] = useState(false)
   const [dbList, setDbList] = useState<DBCreds[]>([])
-
-  useEffect(() => {
-    // console.log(dbCreds, dbList, "dbs");
-  }, [dbCreds, dbList])
 
   useEffect(() => {
     console.log("ID:", dbCreds?.id)
@@ -108,12 +105,11 @@ export default function ConnectionSelector({
       .then((payload) => {
         if (payload && payload.id) {
           handleListDbCreds()
-          setDbCreds(payload)
+          updateDb(payload)
         }
       })
       .catch((error) => {
         console.error("Error fetching database info:", error)
-        setDbCreds(null)
       })
       .finally(() => {
         setDbConnecting(false)
@@ -139,7 +135,7 @@ export default function ConnectionSelector({
   function handleDbDisconnect() {
     invokeDbDisconnect()
       .then(() => {
-        setDbCreds(null)
+        updateDb(null)
         // console.log("Disconnected from the database.")
       })
       .catch((error) => {
@@ -149,12 +145,12 @@ export default function ConnectionSelector({
 
   async function handleDbCredsSelect(creds: DBCreds) {
     setDbConnecting(true)
-    setDbCreds({ ...creds, id: undefined })
+    updateDb({ ...creds, id: undefined })
     console.log(creds)
     try {
       const data = await invokeDbReconnection(creds)
       // console.log("Reconnected to the database:", creds)
-      setDbCreds(data)
+      updateDb(data)
       setOpen(false)
       setNewDbCreds(null)
     } catch (error) {
@@ -190,7 +186,7 @@ export default function ConnectionSelector({
         // console.log("Connected to the database:", res)
         if (res) {
           handleListDbCreds()
-          setDbCreds(res)
+          updateDb(res)
 
           setTimeout(() => {
             setNewDbCreds(null)

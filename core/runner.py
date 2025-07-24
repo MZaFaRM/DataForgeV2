@@ -6,6 +6,7 @@ import threading
 import traceback
 from typing import Any
 
+from core.helpers import requires
 from core.settings import LOG_PATH
 from core.utils.types import TablePacket, TableSpec
 
@@ -50,13 +51,16 @@ class Runner:
             try:
                 self.logger.info(f"Received: {line}")
                 req = json.loads(line)
+                _id = req.pop("id", None)
                 req = Request(**req)
                 res_obj = self.handle_command(req)
+                res_obj["id"] = _id
                 res = json.dumps(res_obj)
                 self.logger.info(f"Response: {res}")
             except Exception as e:
                 tb = traceback.format_exc()
                 res_obj = Response(status="error", error=str(e), traceback=tb).to_dict()
+                res_obj["id"] = _id
                 res = json.dumps(res_obj)
                 self.logger.error(f"Error: {str(e)}\nTraceback: {tb}")
             finally:
@@ -81,27 +85,20 @@ class Runner:
     def _err(self, error: str) -> dict:
         return Response(status="error", error=error).to_dict()
 
+    @requires()
     def _handle_ping(self, _=None) -> dict:
         return self._ok("pong")
 
-    def _handle_get_info_db(self, _=None) -> dict:
+    @requires(connected=True)
+    def _handle_get_db_info(self, _=None) -> dict:
         return self._ok(self.dbf.to_dict())
 
-    def _handle_get_faker_gen(self, _=None) -> dict:
+    @requires()
+    def _handle_get_gen_methods(self, _=None) -> dict:
         return self._ok(self.populator.methods)
 
-    def _handle_connect(self, creds: dict) -> dict:
-        required = ["host", "user", "port", "name", "password"]
-        missing = [k for k in required if not creds.get(k)]
-
-        if missing:
-            msg = (
-                f"Missing required connection parameter: {missing[0]}"
-                if len(missing) == 1
-                else f"Missing required connection parameters: {', '.join(missing[:-1])}, and {missing[-1]}"
-            )
-            return self._err(msg)
-
+    @requires("host", "user", "port", "name", "password")
+    def _handle_set_db_connect(self, creds: dict) -> dict:
         self.dbf.disconnect()
         if saved := self.dbf.registry.exists(
             name=creds["name"],
@@ -123,16 +120,8 @@ class Runner:
 
         return self._ok(self.dbf.to_dict())
 
-    def _handle_reconnect(self, creds: dict):
-        if not creds:
-            return self._err("DB details needed.")
-
-        name, host, port, user = (
-            creds.get(cred, None) for cred in ("name", "host", "port", "user")
-        )
-        if None in (name, host, port, user):
-            return self._err("Requires name, host and port to reconnect")
-
+    @requires("name", "host", "port", "user")
+    def _handle_set_db_reconnect(self, creds: dict):
         self.dbf.disconnect()
         if schema := self.dbf.registry.exists(
             name=creds["name"],
@@ -150,28 +139,29 @@ class Runner:
 
         return self._err("Unknown database.")
 
-    def _handle_list_connections(self, _=None) -> dict:
+    @requires()
+    def _handle_get_pref_connections(self, _=None) -> dict:
         creds = [cred.model_dump() for cred in self.dbf.registry.list_creds()]
         return self._ok(creds)
 
-    def _handle_delete_connection(self, body: dict) -> dict:
-        if not body:
-            return self._err("DB details needed.")
-        name, host, port, user = (
-            body.get(cred, None) for cred in ("name", "host", "port", "user")
-        )
-        if name is None or host is None or port is None or user is None:
-            return self._err("Requires name, host and port to delete connection")
-
+    @requires("name", "host", "port", "user")
+    def _handle_set_pref_delete(self, body: dict) -> dict:
         self.dbf.disconnect()
-        self.dbf.registry.delete_cred(name=name, host=host, port=port, user=user)
+        self.dbf.registry.delete_cred(
+            name=body["name"],
+            host=body["host"],
+            port=body["port"],
+            user=body["user"],
+        )
         return self._ok("Connection deleted successfully.")
 
-    def _handle_disconnect(self, _=None) -> dict:
+    @requires()
+    def _handle_set_db_disconnect(self, _=None) -> dict:
         self.dbf.disconnect()
         return self._ok("Disconnected successfully.")
 
-    def _handle_tables(self, _=None) -> dict:
+    @requires(connected=True)
+    def _handle_get_db_tables(self, _=None) -> dict:
         table_info = {"table_data": {}, "sorted_tables": []}
         _ = self.dbf.engine
         t1 = threading.Thread(
@@ -197,46 +187,46 @@ class Runner:
             ]
         )
 
-    def _handle_table_metadata(self, body: dict) -> dict:
-        if "name" not in body:
-            return self._err("Table name is required.")
-
+    @requires("name", connected=True)
+    def _handle_get_db_table(self, body: dict) -> dict:
         metadata = self.dbf.get_table_metadata(body["name"])
         if not metadata:
             return self._err(f"No metadata found for table '{body['name']}'.")
 
         return self._ok(metadata.model_dump())
 
-    def _handle_verify_spec(self, body: dict) -> dict:
-        specs, result = self.populator.resolve_specifications(
-            self.dbf, TableSpec(**body)
-        )
+    @requires(TableSpec, connected=True)
+    def _handle_get_gen_packets(self, body: dict) -> dict:
+        specs, result = self.populator.build_packets(self.dbf, TableSpec(**body))
         self.dbf.registry.save_specs(specs)
         return self._ok(result.model_dump())
 
-    def _handle_load_spec(self, body: dict) -> dict:
-        if "table_name" not in body:
-            return self._err("Table name is required.")
-        if not self.dbf.id:
-            return self._err("Not connected to a database.")
+    @requires("page", "packet_id", connected=True)
+    def _handle_get_gen_packet(self, body: dict) -> dict:
+        return self._ok(
+            self.populator.get_packet_page(body["page"], body["packet_id"]).model_dump()
+        )
 
+    @requires("table_name", connected=True)
+    def _handle_get_pref_spec(self, body: dict) -> dict:
         spec = self.dbf.registry.get_spec(
             db_id=self.dbf.id, table_name=body["table_name"]
         )
         return self._ok(spec)
 
-    def _handle_get_banner_sql(self, _: dict):
+    @requires()
+    def _handle_get_sql_banner(self, _: dict):
         return self._ok(self.dbf.get_sql_banner())
 
-    def _handle_run_sql(self, body: dict) -> dict:
-        if body is None or "sql" not in body:
-            return self._err("SQL query is required.")
+    @requires("sql")
+    def _handle_run_sql_query(self, body: dict) -> dict:
         try:
             return self._ok(self.dbf.run_sql(body["sql"]))
         except Exception as e:
             return self._err(f"SQL execution failed: {str(e)}")
 
-    def _handle_get_logs(self, body: dict) -> dict:
+    @requires()
+    def _handle_get_logs_read(self, body: dict) -> dict:
         try:
             return self._ok(
                 self.dbf.read_logs(lines=(body.get("lines", 200) if body else 200))
@@ -244,38 +234,42 @@ class Runner:
         except Exception as e:
             return self._err(f"Failed to retrieve logs: {str(e)}")
 
-    def _handle_clear_logs(self, body: dict) -> dict:
+    @requires()
+    def _handle_set_logs_clear(self, _: dict) -> dict:
         try:
             return self._ok(self.dbf.clear_logs())
         except Exception as e:
             return self._err(f"Failed to clear logs: {str(e)}")
 
-    def _handle_insert_sql_packet(self, body: dict) -> dict:
+    @requires("packet_id")
+    def _handle_set_db_insert(self, body: dict) -> dict:
         try:
-            if not body:
-                return self._err("missing params: packet.")
-            self.dbf.insert_sql_packet(TablePacket(**body))
+            packet = self.populator.get_packet_page(packet_id=body["packet_id"])
+            self.dbf.insert_packet(packet)
             return self._ok({"pending_writes": self.dbf.uncommitted})
         except Exception as e:
             return self._err(f"Error inserting packet: {str(e)}")
 
-    def _handle_export_sql_packet(self, body: dict) -> dict:
+    @requires("path", "packet_id")
+    def _handle_set_db_export(self, body: dict) -> dict:
         try:
-            if not body or "path" not in body:
-                return self._err("missing params: path.")
             path = body.pop("path")
-            self.dbf.export_sql_packet(TablePacket(**body), path)
+            packet = self.populator.get_packet_page(packet_id=body["packet_id"])
+            self.dbf.export_sql_packet(packet, path)
             return self._ok(f"SQL packet exported to {path}")
         except Exception as e:
             return self._err(f"Error exporting SQL packet: {str(e)}")
 
-    def _handle_set_commit_db(self, _: dict) -> dict:
+    @requires()
+    def _handle_set_db_commit(self, _: dict) -> dict:
         self.dbf.commit()
         return self._ok("Committed all transactions successfully!")
 
-    def _handle_set_rollback_db(self, _: dict) -> dict:
+    @requires()
+    def _handle_set_db_rollback(self, _: dict) -> dict:
         self.dbf.rollback()
         return self._ok("Rollbacked all transactions successfully!")
 
-    def _handle_get_rows_config(self, _: dict) -> dict:
+    @requires()
+    def _handle_get_pref_rows(self, _: dict) -> dict:
         return self._ok(self.dbf.get_database_rows())

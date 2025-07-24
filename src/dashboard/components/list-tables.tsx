@@ -53,11 +53,9 @@ export default function ListTables({
   }, [dbCreds])
 
   useEffect(() => {
-    console.log("Usage Info list tables:", usageInfo)
     if (usageInfo.length > 0) {
       const map = createUsageInfoMap()
       setUsageInfoMap(map)
-      console.log("Usage Info Map:", map)
     }
   }, [usageInfo])
 
@@ -111,7 +109,7 @@ export default function ListTables({
       scrollContainerRef.current.scrollTop = 0
     }
     return tableEntries?.filter((entry) =>
-      entry.name.toLowerCase().includes(search.toLowerCase())
+      entry?.name?.toLowerCase().includes(search.toLowerCase())
     )
   }, [tableEntries, search])
 
@@ -184,7 +182,6 @@ function TableCard({ entry, usageInfo, active, onClick }: TableCardProps) {
   useEffect(() => {
     if (usageInfo) {
       setRowsCount(usageInfo)
-      console.log("Usage Info for table:", name, usageInfo)
     }
   }, [usageInfo])
 

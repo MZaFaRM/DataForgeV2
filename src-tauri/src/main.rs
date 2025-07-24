@@ -4,28 +4,23 @@
 use std::{
     io::{BufRead, BufReader, Write},
     process::{Command, Stdio},
-    sync::Mutex,
+    sync::{Arc, Mutex},
+    thread,
 };
 
-use tauri::{Manager, State};
+use tauri::{Emitter, Manager, State};
 
 use tauri_plugin_dialog;
 struct Bridge(std::process::Child);
-type Shared = Mutex<Option<Bridge>>;
+type Shared = Arc<Mutex<Option<Bridge>>>;
 
 #[tauri::command]
-fn send(payload: String, state: State<Shared>) -> Result<String, String> {
+fn send(payload: String, state: State<Shared>) -> Result<(), String> {
     let mut guard = state.lock().unwrap();
     let child = guard.as_mut().ok_or("bridge missing")?;
     let stdin = child.0.stdin.as_mut().ok_or("stdin")?;
-    let stdout = child.0.stdout.as_mut().ok_or("stdout")?;
-
     writeln!(stdin, "{payload}").map_err(|e| e.to_string())?;
-    let mut line = String::new();
-    BufReader::new(stdout)
-        .read_line(&mut line)
-        .map_err(|e| e.to_string())?;
-    Ok(line)
+    Ok(())
 }
 
 fn main() {
@@ -42,13 +37,34 @@ fn main() {
                     } else {
                         "populator"
                     });
-            let child = Command::new(exe)
+
+            let mut child = Command::new(exe)
                 .stdin(Stdio::piped())
                 .stdout(Stdio::piped())
                 .spawn()
                 .expect("spawn python");
 
-            app.manage(Mutex::new(Some(Bridge(child))));
+            let stdout = child.stdout.take().ok_or("no stdout")?;
+            let app_handle = app.handle().clone();
+
+            // Spawn a thread to monitor stdout from Python
+            thread::spawn(move || {
+                let reader = BufReader::new(stdout);
+                for line in reader.lines() {
+                    if let Ok(line) = line {
+                        // ADD THIS
+                        let parsed: serde_json::Value =
+                            serde_json::from_str(&line).unwrap_or_default();
+
+                        if let Some(id) = parsed.get("id").and_then(|v| v.as_str()) {
+                            let event = format!("py-response-{}", id);
+                            app_handle.emit(event.as_str(), line.clone()).ok();
+                        }
+                    }
+                }
+            });
+
+            app.manage(Arc::new(Mutex::new(Some(Bridge(child)))));
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![send])

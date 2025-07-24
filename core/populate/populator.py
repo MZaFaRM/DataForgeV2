@@ -1,6 +1,7 @@
 from collections import OrderedDict
 import contextlib
 from typing import Any
+import uuid
 
 from faker import Faker
 
@@ -30,7 +31,7 @@ class Populator:
 
         return self._methods
 
-    def resolve_specifications(
+    def build_packets(
         self, dbf: DatabaseFactory, table_spec: TableSpec
     ) -> tuple[TableSpec, TablePacket]:
         if dbf.id is None:
@@ -44,15 +45,74 @@ class Populator:
 
         columns = list(column_entries.keys())
         rows = list(map(list, zip(*column_entries.values())))
-        return (
-            table_spec,
+
+        table_packet = self.paginate_table_packet(
+            table_spec, columns, rows, errors + _errors
+        )
+        return (table_spec, table_packet)
+
+    def paginate_table_packet(
+        self,
+        table_spec: TableSpec,
+        columns: list[str],
+        entries: list[list[str | None]],
+        errors: list[ErrorPacket],
+    ) -> TablePacket:
+        page_size = table_spec.page_size
+        total_entries = len(entries)
+
+        id = str(uuid.uuid4())
+        _split_entries = [
+            entries[i : i + page_size] for i in range(0, total_entries, page_size)
+        ]
+        total_pages = len(_split_entries)
+        self._cached_packets = [
             TablePacket(
+                id=id,
                 name=table_spec.name,
                 columns=columns,
-                entries=rows,
-                errors=_errors + errors,
-            ),
-        )
+                entries=_split_entries[i],
+                errors=errors,
+                page=i,
+                total_entries=total_entries,
+                total_pages=total_pages,
+            )
+            for i in range(total_pages)
+        ]
+        return self._cached_packets[0]
+
+    def get_packet_page(self, packet_id: str, page: int | None = None) -> TablePacket:
+        if not hasattr(self, "_cached_packets") or not self._cached_packets:
+            raise ValueError(
+                "No cached packet found. Please generate the packet first."
+            )
+
+        if page is not None and page >= len(self._cached_packets):
+            raise ValueError(
+                f"Page {page} out of range. Total pages: {len(self._cached_packets)}."
+            )
+
+        if page is None:
+            packet = self._cached_packets[0]
+        else:
+            packet = self._cached_packets[page]
+
+        if packet.id == packet_id:
+            if page is None:
+                entries = [entry for p in self._cached_packets for entry in p.entries]
+                return TablePacket(
+                    id=packet.id,
+                    name=packet.name,
+                    columns=packet.columns,
+                    entries=entries,
+                    errors=packet.errors,
+                    page=packet.page,
+                    total_entries=packet.total_entries,
+                    total_pages=packet.total_pages,
+                )
+            return packet
+
+        raise ValueError(f"No packet found for ID {packet_id} on page {page}.")
 
     def build_table_entries(
         self,

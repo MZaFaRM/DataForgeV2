@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react"
+import { startTransition, useEffect, useState } from "react"
 import { invokeClearLogs, invokeGetLogs } from "@/api/db"
 import { Icon } from "@iconify/react"
 
@@ -23,7 +23,9 @@ export default function RenderLogs({ activeTab }: { activeTab?: string }) {
   function retrieveLogs() {
     invokeGetLogs()
       .then((logs) => {
-        setLogs(logs.reverse())
+        startTransition(() => {
+          setLogs(logs.reverse())
+        })
       })
       .catch((error) => {
         console.error("Error fetching logs:", error)

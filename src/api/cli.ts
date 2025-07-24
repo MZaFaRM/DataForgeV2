@@ -1,32 +1,34 @@
 import { invoke } from "@tauri-apps/api/core"
+import { once } from "@tauri-apps/api/event"
 import camelcaseKeys from "camelcase-keys"
-import { clsx, type ClassValue } from "clsx"
-import { twMerge } from "tailwind-merge"
 
-import { CliRequest, CliResponse, DBCreds } from "@/components/types"
+import { CliRequest, CliResponse } from "@/components/types"
 
-export async function invokeCliRequest(req: CliRequest<any>): Promise<string> {
-  return invoke<string>("send", {
-    payload: JSON.stringify(req),
-  })
-}
-
-export async function invokeAndExtract<T = unknown, R = unknown>(
-  request: CliRequest<T>
+export async function invokeCliRequest<T = unknown, R = unknown>(
+  req: CliRequest<T>
 ): Promise<R> {
-  try {
-    const raw = await invoke<string>("send", {
-      payload: JSON.stringify(request),
+  const id = Date.now().toString() + Math.random().toString(36).slice(2)
+  const taggedReq = { ...req, id }
+
+  return new Promise(async (resolve, reject) => {
+    const unListen = await once<string>(`py-response-${id}`, (event) => {
+      try {
+        const res = JSON.parse(event.payload || "{}") as CliResponse<R>
+        if (res.status === "ok") {
+          resolve(camelcaseKeys(res.payload || {}, { deep: true }) as R)
+        } else {
+          reject(new Error(res.error || JSON.stringify(res)))
+        }
+      } catch (error: any) {
+        reject(new Error(error?.message || error))
+      } finally {
+        unListen()
+      }
     })
 
-    const res = JSON.parse(raw || "{}") as CliResponse<R>
-
-    if (res.status === "ok") {
-      return camelcaseKeys(res.payload || {}, { deep: true }) as R
-    } else {
-      throw new Error(res.error || JSON.stringify(res))
-    }
-  } catch (err: any) {
-    throw new Error(err?.message || err)
-  }
+    invoke("send", { payload: JSON.stringify(taggedReq) }).catch((e) => {
+      unListen()
+      reject(e)
+    })
+  })
 }

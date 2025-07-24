@@ -1,23 +1,15 @@
-import { table } from "console"
-import { useEffect, useRef, useState } from "react"
 import { invokeDbCommit, invokeDbRollback, invokeTableData } from "@/api/db"
 import {
+  invokeGenPackets,
   invokeGetFakerMethods,
   invokeLoadSpec,
-  invokeVerifySpec,
 } from "@/api/fill"
 import InsertTab from "@/dashboard/components/ui/insert-tab"
 import RenderLogs from "@/dashboard/components/ui/log-tab"
 import RenderPreview from "@/dashboard/components/ui/preview-tab"
 import { Icon } from "@iconify/react"
-import { set } from "date-fns"
-import { ca } from "date-fns/locale"
+import { useEffect, useRef, useState } from "react"
 
-import { cn } from "@/lib/utils"
-import { Badge } from "@/components/ui/badge"
-import { Toaster } from "@/components/ui/toaster"
-import { TooltipProvider } from "@/components/ui/tooltip"
-import { toast } from "@/components/ui/use-toast"
 import {
   ColumnSpec,
   ColumnSpecMap,
@@ -28,6 +20,11 @@ import {
   TableSpecEntry,
   TableSpecMap,
 } from "@/components/types"
+import { Badge } from "@/components/ui/badge"
+import { Toaster } from "@/components/ui/toaster"
+import { TooltipProvider } from "@/components/ui/tooltip"
+import { toast } from "@/components/ui/use-toast"
+import { cn } from "@/lib/utils"
 
 import SqlInsertionTab from "./ui/sql-tab"
 
@@ -62,6 +59,7 @@ export default function InsertionPanel({
   const [pendingWrites, setPendingWrites] = useState<number>(0)
   const [needsRefresh, setNeedsRefresh] = useState<boolean>(false)
   const [fakerMethods, setFakerMethods] = useState<string[] | null>(null)
+  const [loading, setLoading] = useState<boolean>(false)
 
   useEffect(() => {
     getTimeOfDay()
@@ -74,34 +72,23 @@ export default function InsertionPanel({
     if (activeTable) {
       saveToGlobal(tableSpec)
       if (activeTab === "preview") {
-        setActiveTab("insert")
+        handleTabChange("insert")
       }
     }
     fetchActiveTableData()
-    // setActiveTab("insert")
+    // handleTabChange("insert")
   }, [activeTable])
 
   useEffect(() => {
-    if (!dbCreds) {
-      setTableData(null)
-      setTableSpec(null)
-      setTablePacket(null)
-      return
-    }
-    // setActiveTab("insert")
+    setTableData(null)
+    setTableSpec(null)
+    setTablePacket(null)
     setGlobalSpecs({})
   }, [dbCreds])
 
   useEffect(() => {
     setNeedsRefresh(true)
-  }, [tableSpec, activeTab, activeTable])
-
-  useEffect(() => {
-    if (needsRefresh && activeTab == "preview") {
-      handleVerifyTableSpec(tableSpec)
-      setNeedsRefresh(false)
-    }
-  }, [activeTab])
+  }, [tableSpec, activeTable])
 
   useEffect(() => {
     insertTabRef.current?.scrollTo({
@@ -121,38 +108,46 @@ export default function InsertionPanel({
     })
   }, [activeTable, dbCreds])
 
-  useEffect(() => {
-    invokeGetFakerMethods()
-      .then((methods) => {
-        setFakerMethods(methods)
-      })
-      .catch((error) => {
-        console.error("Error fetching faker methods:", error)
-      })
-  }, [])
+  async function handleTabChange(activeTab: string) {
+    setActiveTab(activeTab)
+    if (activeTab === "insert") {
+      if (!fakerMethods) {
+        try {
+          const methods = await invokeGetFakerMethods()
+          setFakerMethods(methods)
+        } catch (error) {
+          console.error(error)
+        }
+      }
+    } else if (activeTab == "preview") {
+      if (needsRefresh) {
+        handleVerifyTableSpec(tableSpec)
+        setNeedsRefresh(false)
+      }
+    }
+  }
 
-  function fetchActiveTableData() {
+  async function fetchActiveTableData() {
     if (!activeTable) {
       setTableData(null)
       setTableSpec(null)
       setTablePacket(null)
       return
     }
+    setLoading(true)
 
-    invokeTableData(activeTable)
-      .then((table) => {
-        // console.log("Fetching data for table:", table)
-        if (!table) {
-          return
-        }
+    try {
+      const table = await invokeTableData(activeTable)
+      if (table) {
         loadTableSpecs(table)
         setTableData(table)
-      })
-      .catch((err) => {
-        console.error("Error fetching table data:", err)
-        setTableData(null)
-        return
-      })
+      }
+    } catch (err) {
+      console.error("Error fetching table data:", err)
+      setTableData(null)
+    } finally {
+      setLoading(false)
+    }
   }
 
   function saveToGlobal(tableSpec: TableSpecEntry | null = null) {
@@ -177,7 +172,7 @@ export default function InsertionPanel({
     let ts: TableSpecEntry = {
       name: tableData.name,
       noOfEntries: 50,
-      columns: tableData.columns.reduce((acc, col) => {
+      columns: tableData.columns?.reduce((acc, col) => {
         acc[col.name] = {
           name: col.name,
           generator: null,
@@ -211,7 +206,7 @@ export default function InsertionPanel({
     }
 
     // Step 4: Fill in default type if still null
-    for (const col of tableData.columns) {
+    for (const col of tableData?.columns ?? []) {
       const spec = ts.columns[col.name]
       // console.log("spec.type:", spec.name, spec.type)
       if (!spec.type) {
@@ -252,11 +247,12 @@ export default function InsertionPanel({
     const newTableSpec: TableSpec = {
       name: specEntry.name,
       noOfEntries: specEntry.noOfEntries || 50,
-      columns: Object.values(specEntry.columns) as ColumnSpec[],
+      pageSize: 250,
+      columns: Object.values(specEntry?.columns ?? []) as ColumnSpec[],
     }
     // console.log("Verifying table spec:", newTableSpec)
     try {
-      const res = await invokeVerifySpec(newTableSpec)
+      const res = await invokeGenPackets(newTableSpec)
       setTablePacket(res)
     } catch (error) {
       console.error("Error verifying spec:", error)
@@ -353,7 +349,10 @@ export default function InsertionPanel({
                 <HandleTransaction
                   onTransactionSuccess={onInserted}
                   pendingWrites={pendingWrites}
-                  setPendingWrites={setPendingWrites}
+                  updatePendingWrites={(val) => {
+                    setPendingWrites(val)
+                    handleVerifyTableSpec()
+                  }}
                 />
               </div>
             </div>
@@ -365,30 +364,30 @@ export default function InsertionPanel({
               label="Script"
               icon="gravity-ui:abbr-sql"
               isActive={activeTab === "sql"}
-              onClick={() => setActiveTab("sql")}
+              onClick={() => handleTabChange("sql")}
             />
             <TabButton
               label="Log"
               icon="octicon:log-16"
               isActive={activeTab === "log"}
-              onClick={() => setActiveTab("log")}
+              onClick={() => handleTabChange("log")}
             />
             <TabButton
               label="Preview"
               icon="lucide:view"
               isActive={activeTab === "preview"}
-              onClick={() => setActiveTab("preview")}
+              onClick={() => handleTabChange("preview")}
             />
             <TabButton
               label="Insert"
               icon="dashicons:insert"
               isActive={activeTab === "insert"}
-              onClick={() => setActiveTab("insert")}
+              onClick={() => handleTabChange("insert")}
             />
           </div>
         </div>
         <div className="flex h-full w-full flex-col overflow-hidden rounded rounded-tr-none border">
-          {tableData && tableData.columns && tableSpec ? (
+          {tableData && tableData?.columns && tableSpec ? (
             <div className="flex h-full w-full flex-col">
               <div
                 key={activeTable}
@@ -414,10 +413,10 @@ export default function InsertionPanel({
               >
                 <RenderPreview
                   tablePacket={tablePacket}
+                  setTablePacket={setTablePacket}
                   onRefresh={handleVerifyTableSpec}
                   onInserted={onInserted}
                   noOfRows={tableSpec?.noOfEntries}
-                  pendingWrites={pendingWrites}
                   setPendingWrites={setPendingWrites}
                   setNoOfRows={(rows) =>
                     setTableSpec((prev) => {
@@ -453,11 +452,18 @@ export default function InsertionPanel({
                 />
               </div>
             </div>
-          ) : (
+          ) : !dbCreds || (dbCreds && !loading) ? (
             <div className="flex h-full w-full items-center justify-center">
               <Icon
                 icon={`meteocons:${timeOfDay}-fill`}
                 className="margin-auto h-16 w-16"
+              />
+            </div>
+          ) : (
+            <div className="flex h-full items-center justify-center bg-muted">
+              <Icon
+                icon="fontisto:spinner-fidget"
+                className="h-4 w-4 animate-spin text-muted-foreground"
               />
             </div>
           )}
@@ -496,11 +502,11 @@ function TabButton({
 
 function HandleTransaction({
   pendingWrites,
-  setPendingWrites,
+  updatePendingWrites,
   onTransactionSuccess,
 }: {
   pendingWrites: number
-  setPendingWrites: (count: number) => void
+  updatePendingWrites: (count: number) => void
   onTransactionSuccess: () => void
 }) {
   const [showCheck, setShowCheck] = useState<boolean>(false)
@@ -519,7 +525,7 @@ function HandleTransaction({
         setTimeout(() => {
           setShowCheck(false)
         }, 2000)
-        setPendingWrites(0)
+        updatePendingWrites(0)
       })
       .catch((error) => {
         console.error("Commit failed:", error)
@@ -544,7 +550,7 @@ function HandleTransaction({
           setShowCheck(false)
         }, 2000)
 
-        setPendingWrites(0)
+        updatePendingWrites(0)
       })
       .catch((error) => {
         console.error("Rollback failed:", error)

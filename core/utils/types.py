@@ -1,6 +1,7 @@
 from datetime import datetime
 import enum
 from typing import Literal, Optional
+import uuid
 from pydantic import BaseModel
 from sqlalchemy import Column, ColumnElement
 
@@ -62,6 +63,7 @@ class ColumnSpec(BaseModel):
 
 class TableSpec(BaseModel):
     db_id: Optional[int] = None
+    page_size: int = 100
     name: str
     no_of_entries: int
     columns: list[ColumnSpec]
@@ -76,10 +78,15 @@ class ErrorPacket(BaseModel):
 
 
 class TablePacket(BaseModel):
+    id: str
     name: str
     columns: list[str]
     entries: list[list[str | None]]
     errors: list[ErrorPacket] = []
+    
+    page: int
+    total_pages: int
+    total_entries: int
 
 
 class DbCredsSchema(BaseModel):

@@ -1,21 +1,28 @@
 import { TablePacket, TableSpec } from "@/components/types"
 
-import { invokeAndExtract } from "./cli"
+import { invokeCliRequest } from "./cli"
 
 export function invokeGetFakerMethods() {
-  return invokeAndExtract<void, string[]>({ kind: "get_faker_gen" })
+  return invokeCliRequest<void, string[]>({ kind: "get_gen_methods" })
 }
 
-export function invokeVerifySpec(tableSpec: TableSpec) {
-  return invokeAndExtract<TableSpec, TablePacket>({
-    kind: "verify_spec",
+export function invokeGenPackets(tableSpec: TableSpec) {
+  return invokeCliRequest<TableSpec, TablePacket>({
+    kind: "get_gen_packets",
     body: tableSpec,
   })
 }
 
+export function invokeGetGenPacket(packetId: string, page: number) {
+  return invokeCliRequest<{ packetId: string; page: number }, TablePacket>({
+    kind: "get_gen_packet",
+    body: { packetId: packetId, page: page },
+  })
+}
+
 export function invokeLoadSpec(dbId: number, tableName: string) {
-  return invokeAndExtract<Record<string, string | number>, TableSpec>({
-    kind: "load_spec",
+  return invokeCliRequest<Record<string, string | number>, TableSpec>({
+    kind: "get_pref_spec",
     body: {
       dbId: dbId,
       tableName: tableName,
@@ -23,16 +30,16 @@ export function invokeLoadSpec(dbId: number, tableName: string) {
   })
 }
 
-export function invokeInsertSqlPacket(packet: TablePacket) {
-  return invokeAndExtract<TablePacket, { pendingWrites: number }>({
-    kind: "insert_sql_packet",
-    body: packet,
+export function invokeInsertSqlPacket(packetID: string) {
+  return invokeCliRequest<{ packet_id: string }, { pendingWrites: number }>({
+    kind: "set_db_insert",
+    body: { packet_id: packetID },
   })
 }
 
-export function invokeExportSqlPacket(packet: TablePacket, path: string) {
-  return invokeAndExtract<{ path: string } & TablePacket, string>({
-    kind: "export_sql_packet",
-    body: { ...packet, path: path },
+export function invokeExportSqlPacket(packetID: string, path: string) {
+  return invokeCliRequest<{ path: string; packet_id: string }, string>({
+    kind: "set_db_export",
+    body: { packet_id: packetID, path: path },
   })
 }

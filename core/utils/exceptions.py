@@ -13,5 +13,6 @@ class ValidationWarning(Exception):
 class ValidationError(Exception):
     pass
 
+
 class ManualException(Exception):
     pass

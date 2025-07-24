@@ -48,6 +48,7 @@ class DbCredsModel(Base):
 class TableSpecModel(Base):
     id = Column(Integer, primary_key=True, autoincrement=True)
     db_id = Column(Integer, ForeignKey("db_creds.id", ondelete="CASCADE"), nullable=False)
+    page_size = Column(Integer, nullable=False, default=100)
     name = Column(String(255), nullable=False)
     no_of_entries = Column(Integer, nullable=False)
     columns = relationship("ColumnSpecModel", back_populates="table", cascade="all, delete-orphan", order_by="ColumnSpecModel.id")

@@ -277,7 +277,10 @@ export default function ConnectionSelector({
               <CommandEmpty>No DB found.</CommandEmpty>
               <CommandSeparator />
               <CommandGroup heading="Actions">
-                <CommandItem onSelect={handleSavedDbCreds}>
+                <CommandItem
+                  onSelect={handleSavedDbCreds}
+                  disabled={dbConnecting}
+                >
                   <Icon
                     icon="mdi:refresh"
                     className={cn(

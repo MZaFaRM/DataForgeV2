@@ -123,96 +123,75 @@ class Populator:
 
         metadata = dbf.get_table_metadata(table_spec.name)
         errors: list[ErrorPacket] = []
-        column_values: dict[str, list[str | None]] = {
-            col.name: [None] * table_spec.no_of_entries for col in table_spec.columns
-        }
 
-        for col_spec in ordered_columns:
-            if col_spec.type is None or col_spec.generator is None:
-                continue
+        context = ContextFactory(
+            row_idx=0,
+            dbf=dbf,
+            table=metadata,
+            col_spec=ordered_columns[0],
+            entries={
+                col.name: [None] * table_spec.no_of_entries
+                for col in table_spec.columns
+            },
+        )
 
-            col_meta = metadata.get_column(col_spec.name)
-            assert col_meta, f"Column {col_spec.name} not found"
+        gen_fns = [
+            self.tf.make(col.type)(context)
+            for col in ordered_columns
+            if col.type is not None
+        ]
 
-            try:
-                generated_rows, errors = self.populate_column(
-                    dbf=dbf,
-                    table_meta=metadata,
-                    col_spec=col_spec,
-                    rows=table_spec.no_of_entries,
-                    entries=column_values,
-                )
+        for entry_index in range(table_spec.no_of_entries):
+            i = 0
+            while i < len(gen_fns):
+                try:
+                    context.col_spec = ordered_columns[i]
 
-                for i in range(min(len(generated_rows), table_spec.no_of_entries)):
-                    column_values[col_spec.name][i] = generated_rows[i]
+                    gen = gen_fns[i]
+                    col_spec = context.col_spec
 
-                if len(generated_rows) < table_spec.no_of_entries:
-                    error = (
-                        f"Failed to populate column '{col_spec.name}' in table '{table_spec.name}': "
-                        f"{len(generated_rows)}/{table_spec.no_of_entries} values generated."
-                    )
-                    if col_meta.nullable:
-                        raise ValidationWarning(error)
+                    for _ in range(10):
+                        value = next(gen)
+                        if self.is_valid(context, value):
+                            context.entries[col_spec.name][entry_index] = value
+                            i += 1
+                            break
+
                     else:
-                        raise ValidationError(error)
+                        error = f"Failed to populate column '{col_spec.name}' in table '{table_spec.name}'"
+                        if context.column.nullable:
+                            raise ValidationWarning(error)
+                        else:
+                            raise ValidationError(error)
+                except ValidationWarning as e:
+                    gen_fns.pop(i)
+                    ordered_columns.pop(i)
+                    errors.append(
+                        ErrorPacket(
+                            column=context.col_spec.name,
+                            type="warning",
+                            msg=str(e),
+                        )
+                    )
 
-            except ValidationWarning as e:
-                errors.append(
-                    ErrorPacket(column=col_spec.name, type="warning", msg=str(e))
-                )
-            except Exception as e:
-                errors.append(
-                    ErrorPacket(column=col_spec.name, type="error", msg=str(e))
-                )
+                except Exception as e:
+                    gen_fns.pop(i)
+                    ordered_columns.pop(i)
+                    errors.append(
+                        ErrorPacket(
+                            column=context.col_spec.name,
+                            type="error",
+                            msg=str(e),
+                        )
+                    )
 
-        # make the entries row major
-        return errors, column_values
+            context.row_idx += 1
+
+        return errors, context.entries
 
     # endregion
 
     # region helpers
-
-    def populate_column(
-        self,
-        dbf: DatabaseFactory,
-        table_meta: TableMetadata,
-        col_spec: ColumnSpec,
-        rows: int,
-        entries: dict[str, list[str | None]],
-    ) -> tuple[list[str | None], list[ErrorPacket]]:
-        max_attempts = 10
-        generated_rows = []
-
-        context = ContextFactory(
-            dbf=dbf,
-            table=table_meta,
-            col_spec=col_spec,
-            n=rows,
-            entries=entries,
-            errors=[],
-        )
-        column = context.column
-
-        for _ in range(max_attempts):
-            is_computed = col_spec.type == GType.python
-            generated_rows: list[str | None] = self.tf.make(
-                col_spec.type, context=context
-            )
-
-            generated_rows = self._filter_rows(
-                context=context,
-                rows=generated_rows,
-                is_computed=is_computed,
-            )
-            if is_computed:
-                break
-
-            if len(generated_rows) >= rows:
-                break
-            elif column.foreign_keys:
-                break
-
-        return generated_rows, context.errors
 
     def _validate_and_sort_specs(
         self, specs: list[ColumnSpec]
@@ -223,6 +202,13 @@ class Populator:
 
         result_python = {}
 
+        def is_valid_type(type: GType) -> bool:
+            return type not in {
+                GType.autoincrement,
+                GType.computed,
+                GType.null,
+            }
+
         for c_spec in specs:
             try:
                 if c_spec.type == GType.python and c_spec.generator:
@@ -231,7 +217,11 @@ class Populator:
                         order += 1
                     result_python[order] = c_spec
 
-                elif not (c_spec.type is None or c_spec.generator is None):
+                elif (
+                    c_spec.generator is not None
+                    and c_spec.type is not None
+                    and is_valid_type(c_spec.type)
+                ):
                     self.tf.check(c_spec.type, c_spec.generator)
                     result.append(c_spec)
 
@@ -247,54 +237,48 @@ class Populator:
         result.extend(result_python[key] for key in sorted(result_python.keys()))
         return errors, result
 
-    def _filter_rows(
-        self, context: ContextFactory, rows: list[str | None], is_computed: bool = False
-    ) -> list[str | None]:
-        filtered_rows = rows
-        table = context.table
-        col_spec = context.col_spec
-        cache = context.cache
-        dbf = context.dbf
+    def is_valid(self, context: ContextFactory, value: str | None) -> bool:
+        column_name = context.col_spec.name
+        table_name = context.table.name
+        row_idx = context.row_idx
+        column = context.column
 
-        def satisfy_unique(
-            rows: list[str | None], is_computed: bool
-        ) -> list[str | None]:
+        # UNIQUE check (single-column)
+        if column.unique and context.col_spec.type not in {
+            GType.null,
+            GType.autoincrement,
+            GType.computed,
+        }:
+            seen_key = f"{table_name}.{column_name}"
+            seen: set = self.fetch_existing_values(context, key=seen_key)
 
-            seen = set()
-            unique_row = [
-                row for row in rows if row is None or not (row in seen or seen.add(row))
-            ]
-            cache_key = f"{table.name}.{col_spec.name}"
-            if cache is not None:
-                if cache_key in cache:
-                    forbidden = cache[cache_key]
-                else:
-                    forbidden = cache[cache_key] = set(
-                        dbf.get_existing_values(table.name, col_spec.name)
+            # Check existing data
+            if value in seen:
+                return False
+
+            # Check earlier generated entries in current session
+            if value in context.entries[column_name][:row_idx]:
+                return False
+
+        return True
+
+    def get_column_indices(self, *items, columns: list[ColumnMetadata]) -> set[int]:
+        sibling_idxs = set()
+        for idx, col in enumerate(columns):
+            if col.name in items:
+                sibling_idxs.add(idx)
+        return sibling_idxs
+
+    def fetch_existing_values(self, context, key) -> set[str]:
+        if context.cache is not None:
+            if key in context.cache:
+                seen = context.cache[key]
+            else:
+                seen = context.cache[key] = set(
+                    context.dbf.get_existing_values(
+                        context.table.name, context.col_spec.name
                     )
-                unique_row = [row for row in unique_row if row not in forbidden]
-
-            if is_computed:
-                if len(unique_row) != len(rows):
-                    context.errors.append(
-                        ErrorPacket(
-                            column=col_spec.name,
-                            type="error",
-                            msg=f"Computed column '{col_spec.name}' in table '{table.name}' must be unique, "
-                            f"but {len(rows) - len(unique_row)} duplicates were found.",
-                        )
-                    )
-                return rows
-            return unique_row
-
-        col_md = table.get_column(col_spec.name)
-        assert col_md, f"Column {col_spec.name} not found in table {table.name}"
-        if col_md.unique and context.col_spec.type != GType.null:
-            filtered_rows = satisfy_unique(
-                filtered_rows,
-                is_computed=is_computed,
-            )
-
-        return filtered_rows
+                )
+        return seen
 
     # endregion

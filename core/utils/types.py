@@ -36,6 +36,9 @@ class ColumnMetadata(BaseModel):
     precision: Optional[int] = None
     scale: Optional[int] = None
 
+    def __eq__(self, other: object) -> bool:
+        return isinstance(other, ColumnMetadata) and self.name == other.name
+
 
 class TableMetadata(BaseModel):
     name: str
@@ -83,7 +86,7 @@ class TablePacket(BaseModel):
     columns: list[str]
     entries: list[list[str | None]]
     errors: list[ErrorPacket] = []
-    
+
     page: int
     total_pages: int
     total_entries: int

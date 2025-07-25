@@ -175,6 +175,37 @@ def test_empty_get_gen_packets(runner: Runner):
     ), response["payload"]["entries"][0][:3]
 
 
+def test_get_gen_packets(runner: Runner):
+    req = Request(kind="set_db_reconnect", body=TEST_CREDS)
+    res = runner.handle_command(req)
+    assert res["status"] == "ok", res["error"]
+
+    body = {
+        "name": "classes",
+        "noOfEntries": 50,
+        "columns": [
+            {
+                "name": "class_id",
+                "generator": "autoincrement",
+                "type": "autoincrement",
+            },
+            {"name": "class_name", "generator": "^(CS|MECH|IT)", "type": "regex"},
+            {
+                "name": "room_number",
+                "generator": "^(L|R|M)[1-3]0[1-9]$",
+                "type": "regex",
+            },
+            {
+                "name": "teacher_id",
+                "generator": "teachers__teacher_id",
+                "type": "foreign",
+            },
+        ],
+    }
+    response = runner.handle_command(Request(kind="get_gen_packets", body=body))
+    assert response["status"] == "ok", f"Load spec failed: {response['error']}"
+
+
 def test_verify_teachers_table_spec(runner: Runner):
     req = Request(kind="set_db_reconnect", body=TEST_CREDS)
     res = runner.handle_command(req)
@@ -186,7 +217,7 @@ def test_uncommitted(runner: Runner):
     res = runner.handle_command(req)
     assert res["status"] == "ok", res["error"]
 
-    body = {"dbId": 1, "name": "teachers"}
+    body = {"dbId": 1, "table_name": "classes"}
     response = runner.handle_command(Request(kind="get_pref_spec", body=body))
     assert response["status"] == "ok", f"Load spec failed: {response['error']}"
 
@@ -197,7 +228,7 @@ def test_uncommitted(runner: Runner):
         assert load_res["status"] == "ok", load_res["error"]
 
         insert_res = runner.handle_command(
-            Request(kind="insert_packet", body=load_res["payload"])
+            Request(kind="set_db_insert", body={"packet_id": load_res["payload"]["id"]})
         )
         assert insert_res["status"] == "ok", insert_res["error"]
         assert insert_res["payload"]["pending_writes"] == i
@@ -212,7 +243,7 @@ def test_commit_and_rollback(runner: Runner):
     res = runner.handle_command(req)
     assert res["status"] == "ok", res["error"]
 
-    body = {"dbId": 1, "tableName": "teachers"}
+    body = {"dbId": 1, "tableName": "classes"}
     response = runner.handle_command(Request(kind="get_pref_spec", body=body))
     assert response["status"] == "ok", f"Load spec failed: {response['error']}"
 
@@ -222,7 +253,7 @@ def test_commit_and_rollback(runner: Runner):
     assert load_res["status"] == "ok", load_res["error"]
 
     insert_res = runner.handle_command(
-        Request(kind="insert_packet", body=load_res["payload"])
+        Request(kind="set_db_insert", body={"packet_id": load_res["payload"]["id"]})
     )
     assert insert_res["status"] == "ok", insert_res["error"]
 
@@ -230,7 +261,7 @@ def test_commit_and_rollback(runner: Runner):
     assert commit_res["status"] == "ok", commit_res["error"]
 
     insert_res = runner.handle_command(
-        Request(kind="insert_packet", body=load_res["payload"])
+        Request(kind="set_db_insert", body={"packet_id": load_res["payload"]["id"]})
     )
     assert insert_res["status"] == "ok", insert_res["error"]
 
@@ -243,135 +274,18 @@ def test_commit_and_rollback(runner: Runner):
     assert commit_res["status"] == "ok", commit_res["error"]
 
 
-# def test_insert_packet(runner: Runner):
-#     req = Request(kind="set_db_reconnect", body=TEST_CREDS)
-#     res = runner.handle_command(req)
-#     assert res["status"] == "ok", res["error"]
-
-#     body = {
-#         "name": "teachers",
-#         "columns": ["teacher_id", "full_name", "department", "salary"],
-#         "entries": [
-#             [None, "Gregory Lamb", "IT", "55100"],
-#             [None, "Robert Wells", "CS", "32133"],
-#             [None, "William Grant", "MECH", "35878"],
-#             [None, "Meagan Cline", "MECH", "42095"],
-#             [None, "Chase Coleman", "CS", "35753"],
-#             [None, "Yolanda West", "CS", "36990"],
-#             [None, "Jessica Parsons", "CIVIL", "54170"],
-#             [None, "Joshua Martinez", "IT", "30056"],
-#             [None, "Susan Gonzalez", "CIVIL", "39751"],
-#             [None, "Elizabeth Bowers", "CS", "38867"],
-#             [None, "Sharon Nguyen", "CIVIL", "51314"],
-#             [None, "Misty Ward", "IT", "44735"],
-#             [None, "Jon Vega", "CIVIL", "47897"],
-#             [None, "Rachel Scott", "IT", "54591"],
-#             [None, "Tina Noble", "MECH", "44018"],
-#             [None, "Pamela Wright", "MECH", "37111"],
-#             [None, "Dale Weiss", "IT", "44012"],
-#             [None, "John Mann", "CIVIL", "37298"],
-#             [None, "Craig Rodriguez", "CIVIL", "43242"],
-#             [None, "Gordon Wilson", "CS", "48078"],
-#             [None, "Carrie Perez", "CS", "44548"],
-#             [None, "Robert York", "IT", "51658"],
-#             [None, "Jeffrey Lozano", "MECH", "37311"],
-#             [None, "Marie Turner", "MECH", "52124"],
-#             [None, "Jonathan Holmes", "MECH", "43236"],
-#             [None, "Mary Lin", "MECH", "42055"],
-#             [None, "Jeremy Cole", "CS", "48148"],
-#             [None, "Richard Miller", "MECH", "52431"],
-#             [None, "Jamie Gregory", "IT", "35699"],
-#             [None, "John Tran", "CS", "46852"],
-#             [None, "Jennifer Walton", "CIVIL", "51372"],
-#             [None, "Chelsea Brown", "CIVIL", "44862"],
-#             [None, "Stephen Smith", "IT", "32604"],
-#             [None, "Anthony Graham", "CIVIL", "31340"],
-#             [None, "Jennifer Wilkins", "CS", "39162"],
-#             [None, "Rebecca Jenkins MD", "MECH", "38298"],
-#             [None, "Michael Miller", "IT", "59444"],
-#             [None, "Julia Peterson", "MECH", "48126"],
-#             [None, "Timothy Bauer", "CIVIL", "52236"],
-#             [None, "Laura Pierce", "CIVIL", "48196"],
-#             [None, "David Gibson", "IT", "30034"],
-#             [None, "Katherine Sanders", "CS", "35318"],
-#             [None, "Stacey Mcguire", "IT", "36849"],
-#             [None, "Alexis Hooper", "MECH", "43890"],
-#             [None, "Tina Lee", "MECH", "51536"],
-#             [None, "Donna Richard", "IT", "38350"],
-#             [None, "Elizabeth Armstrong", "IT", "40857"],
-#             [None, "Jay Price", "IT", "46078"],
-#             [None, "Jason Trujillo", "IT", "56435"],
-#             [None, "Jeffrey Burton", "IT", "58438"],
-#         ],
-#     }
-
-#     response = runner.handle_command(Request(kind="insert_packet", body=body))
-#     assert response["status"] == "ok", response["error"]
-
-
-def test_get_pref_rows(runner: Runner):
-    req = Request(kind="set_db_reconnect", body=TEST_CREDS)
-    res = runner.handle_command(req)
-    assert res["status"] == "ok", res["error"]
-
-    # Run get_pref_rows
-    res = runner.handle_command(Request(kind="get_pref_rows", body=None))
-    assert res["status"] == "ok", f"get_pref_rows failed: {res['error']}"
-    prior = next(
-        (table for table in res["payload"] if table["table_name"] == "teachers"), {}
-    )["new_rows"]
-
-    # Insert data
-    body = {"dbId": 1, "tableName": "teachers"}
-    response = runner.handle_command(Request(kind="get_pref_spec", body=body))
-    assert response["status"] == "ok", f"Load spec failed: {response['error']}"
-
-    packets = runner.handle_command(
-        Request(kind="get_gen_packets", body=response["payload"])
-    )
-    assert packets["status"] == "ok", packets["error"]
-
-    insert_res = runner.handle_command(
-        Request(kind="insert_packet", body=packets["payload"])
-    )
-    assert insert_res["status"] == "ok", insert_res["error"]
-
-    # Run get_pref_rows again
-    res = runner.handle_command(Request(kind="get_pref_rows", body=None))
-    assert res["status"] == "ok", f"get_pref_rows failed: {res['error']}"
-    after = next(
-        (table for table in res["payload"] if table["table_name"] == "teachers"), {}
-    )["new_rows"]
-
-    assert after == (
-        prior + len(packets["payload"]["entries"])
-    ), f"{after} != {prior} + {len(packets['payload']['entries'])}"
-
-
 def test_get_gen_packets_order(runner: Runner):
+    TEST_CREDS["name"] = "mulearn"
     req = Request(kind="set_db_reconnect", body=TEST_CREDS)
     res = runner.handle_command(req)
     assert res["status"] == "ok", res["error"]
 
-    spec = {
-        "name": "classes",
-        "noOfEntries": 50,
-        "columns": [
-            {
-                "name": "class_id",
-                "generator": "autoincrement",
-                "type": "autoincrement",
-            },
-            {"name": "class_name", "generator": "^(CSE|MECH|IT)$", "type": "regex"},
-            {
-                "name": "room_number",
-                "generator": "\n@order(1)\ndef generator(columns):\n    return random.randint(18, 25)",
-                "type": "python",
-            },
-            {"name": "teacher_id", "generator": None, "type": "foreign"},
-        ],
-    }
+    # load user table spec
+    req = Request(kind="get_pref_spec", body={"dbId": runner.dbf.id, "tableName": "user"})
+    res = runner.handle_command(req)
+    assert res["status"] == "ok", f"Load spec failed: {res['error']}"
 
-    req = Request(kind="get_gen_packets", body=spec)
+    # get gen packets
+    req = Request(kind="get_gen_packets", body=res["payload"])
     res = runner.handle_command(req)
     assert res["status"] == "ok", res["error"]

@@ -14,7 +14,7 @@ from dataclasses import dataclass
 from numbers import Number
 from pathlib import Path
 import time
-from typing import Any, Callable, Literal
+from typing import Any, Callable, Generator, Literal
 
 import faker
 import networkx as nx
@@ -559,11 +559,10 @@ class DatabaseFactory:
 
 @dataclass
 class ContextFactory:
+    row_idx: int
     dbf: DatabaseFactory
     table: TableMetadata
     col_spec: ColumnSpec
-    n: int
-    errors: list[ErrorPacket]
     entries: dict[str, list[str | None]]
 
     @property
@@ -583,24 +582,26 @@ class GeneratorFactory:
     def __init__(self) -> None:
         self.faker = Faker()
 
-    def make(self, type: GType | None, context: ContextFactory) -> list[str | None]:
-        if type is None:
-            return []
+    def make(self, type: GType) -> Callable[[ContextFactory], Generator[str | None, None, None]]:
         make_fn = getattr(self, f"make_{type.value}", None)
         if make_fn is None or not callable(make_fn):
             raise ValueError(f"Unknown generator type: {type}")
-        return make_fn(context)  # type: ignore
+        return make_fn # type: ignore
 
-    def make_faker(self, context: ContextFactory) -> list[str | None]:
-        assert context.col_spec.generator, "Faker generator is not specified."
-        faker_fn = getattr(self.faker, context.col_spec.generator)
-        return self._sample_values(context.n, faker_fn, context.column)
+    def make_faker(self, context: ContextFactory) -> Generator[str | None, None, None]:
+        faker_fn = getattr(self.faker, context.col_spec.generator or "")
+        col = context.column
+        while True:
+            val = faker_fn()
+            if isinstance(val, str):
+                val = cap_string(val, col.length)
+            elif isinstance(val, Number):
+                val = cap_numeric(val, col.precision, col.scale)  # type: ignore
+            yield str(val)
 
-    def make_python(self, context: ContextFactory) -> list[str | None]:
-        if not context.col_spec.generator:
-            return []
+    def make_python(self, context: ContextFactory) -> Generator[str | None, None, None]:
         try:
-            tree = ast.parse(context.col_spec.generator)
+            tree = ast.parse(context.col_spec.generator or "")
 
             # Prepare the environment for execution
             env = {
@@ -613,29 +614,25 @@ class GeneratorFactory:
 
             # Call the generator function
             gen = env["generator"]
-            col = context.column
-
-            rows = []
-            for idx in range(context.n):
-                columns = {key: context.entries[key][idx] for key in context.entries}
-                val = gen(columns=columns)
-
-                if isinstance(val, str):
-                    val = cap_string(val, col.length)
-                elif isinstance(val, Number):
-                    val = cap_numeric(val, col.precision, col.scale)  # type: ignore
-
-                rows.append(str(val))
-            return rows
+            while True:
+                columns = {key: context.entries[key][context.row_idx] for key in context.entries}
+                yield str(gen(columns=columns))
 
         except SyntaxError as e:
             raise VerificationError(f"Syntax Error in Python script: {e}")
 
-    def make_regex(self, context: ContextFactory) -> list[str | None]:
+    def make_regex(self, context: ContextFactory) -> Generator[str | None, None, None]:
+        col = context.column
         regex_fn = lambda: rstr.xeger(context.col_spec.generator or "")
-        return self._sample_values(context.n, regex_fn, context.column)
+        while True:
+            val = regex_fn()
+            if isinstance(val, str):
+                val = cap_string(val, col.length)
+            elif isinstance(val, Number):
+                val = cap_numeric(val, col.precision, col.scale)  # type: ignore
+            yield str(val)
 
-    def make_foreign(self, context: ContextFactory) -> list[str | None]:
+    def make_foreign(self, context: ContextFactory) -> Generator[str | None, None, None]:
         column = context.column
         fk = column.foreign_keys
         cache = context.cache
@@ -656,34 +653,22 @@ class GeneratorFactory:
                 raise ValidationWarning(msg)
             else:
                 raise ValueError(msg)
+            
+        while True:
+            yield random.choice(rows)
 
-        return [random.choice(rows) for _ in range(context.n)]
+    def make_autoincrement(self, context: ContextFactory) -> Generator[str | None, None, None]:
+        while True:
+            yield None
 
-    def make_autoincrement(self, context: ContextFactory) -> list[str | None]:
-        return [None for _ in range(context.n)]
+    def make_computed(self, context: ContextFactory) -> Generator[str | None, None, None]:
+        while True:
+            yield None
 
-    def make_computed(self, context: ContextFactory) -> list[str | None]:
-        return [None for _ in range(context.n)]
+    def make_null(self, context: ContextFactory) -> Generator[str | None, None, None]:
+        while True:
+            yield None
     
-    def make_null(self, context: ContextFactory) -> list[str | None]:
-        return [None for _ in range(context.n)]
-
-    def _sample_values(
-        self, n: int, gen_fn: Callable, col: ColumnMetadata
-    ) -> list[str | None]:
-        overshoot = math.ceil(n * 1.5)
-        rows = []
-        for _ in range(overshoot):
-            val = gen_fn()
-
-            if isinstance(val, str):
-                val = cap_string(val, col.length)
-            elif isinstance(val, Number):
-                val = cap_numeric(val, col.precision, col.scale)  # type: ignore
-
-            rows.append(str(val))
-
-        return list(rows)
 
     def check(self, type: GType, generator: str) -> bool | int:
         make_fn = getattr(self, f"check_{type.value}", None)

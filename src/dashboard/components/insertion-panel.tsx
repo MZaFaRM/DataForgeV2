@@ -1,3 +1,4 @@
+import { useEffect, useRef, useState } from "react"
 import { invokeDbCommit, invokeDbRollback, invokeTableData } from "@/api/db"
 import {
   invokeGenPackets,
@@ -8,8 +9,12 @@ import InsertTab from "@/dashboard/components/ui/insert-tab"
 import RenderLogs from "@/dashboard/components/ui/log-tab"
 import RenderPreview from "@/dashboard/components/ui/preview-tab"
 import { Icon } from "@iconify/react"
-import { useEffect, useRef, useState } from "react"
 
+import { cn } from "@/lib/utils"
+import { Badge } from "@/components/ui/badge"
+import { Toaster } from "@/components/ui/toaster"
+import { TooltipProvider } from "@/components/ui/tooltip"
+import { toast } from "@/components/ui/use-toast"
 import {
   ColumnSpec,
   ColumnSpecMap,
@@ -20,11 +25,6 @@ import {
   TableSpecEntry,
   TableSpecMap,
 } from "@/components/types"
-import { Badge } from "@/components/ui/badge"
-import { Toaster } from "@/components/ui/toaster"
-import { TooltipProvider } from "@/components/ui/tooltip"
-import { toast } from "@/components/ui/use-toast"
-import { cn } from "@/lib/utils"
 
 import SqlInsertionTab from "./ui/sql-tab"
 
@@ -239,14 +239,17 @@ export default function InsertionPanel({
     }
   }
 
-  async function handleVerifyTableSpec(tSpec: TableSpecEntry | null = null) {
+  async function handleVerifyTableSpec(
+    tSpec: TableSpecEntry | null = null,
+    rows: number | null = null
+  ) {
     const specEntry = tSpec || tableSpec
     // console.log("Verifying table spec:", specEntry)
     if (!specEntry) return
 
     const newTableSpec: TableSpec = {
       name: specEntry.name,
-      noOfEntries: specEntry.noOfEntries || 50,
+      noOfEntries: rows || specEntry.noOfEntries || 50,
       pageSize: 250,
       columns: Object.values(specEntry?.columns ?? []) as ColumnSpec[],
     }
@@ -414,19 +417,10 @@ export default function InsertionPanel({
                 <RenderPreview
                   tablePacket={tablePacket}
                   setTablePacket={setTablePacket}
-                  onRefresh={handleVerifyTableSpec}
+                  onRefresh={(rows) => handleVerifyTableSpec(null, rows)}
                   onInserted={onInserted}
                   noOfRows={tableSpec?.noOfEntries}
                   setPendingWrites={setPendingWrites}
-                  setNoOfRows={(rows) =>
-                    setTableSpec((prev) => {
-                      if (!prev) return prev
-                      return {
-                        ...prev,
-                        noOfEntries: rows,
-                      }
-                    })
-                  }
                 />
               </div>
               <div

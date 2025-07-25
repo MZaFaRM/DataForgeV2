@@ -34,11 +34,10 @@ import { TablePacket } from "@/components/types"
 interface RenderPreviewProps {
   tablePacket: TablePacket | null
   setTablePacket: (packet: TablePacket) => void
-  onRefresh: () => void
+  onRefresh: (rows: number | null) => void
   onInserted: () => void
   setPendingWrites: (n: number) => void
   noOfRows: number | null
-  setNoOfRows: (rows: number) => void
 }
 
 export default function RenderPreview({
@@ -48,7 +47,6 @@ export default function RenderPreview({
   onInserted,
   noOfRows,
   setPendingWrites,
-  setNoOfRows,
 }: RenderPreviewProps) {
   const [dice, setDice] = useState<number>(1)
   const [errorCols, setErrorCols] = useState<Record<string, string>>({})
@@ -56,6 +54,9 @@ export default function RenderPreview({
   const [showCheck, setShowCheck] = useState<boolean>(false)
   const [loading, setLoading] = useState<boolean>(false)
   const [page, setPage] = useState<number>(0)
+  const [noOfRowsInput, setNoOfRowsInput] = useState<number | null>(
+    noOfRows || 1
+  )
 
   function handleInsertPacket() {
     if (!tablePacket) return
@@ -163,7 +164,7 @@ export default function RenderPreview({
     }
   }
 
-  async function getNewPacket(page: number, packetId: string) {
+  async function getNewPacket(page: number | string, packetId: string) {
     if (!tablePacket) return
     setLoading(true)
     try {
@@ -173,9 +174,9 @@ export default function RenderPreview({
       } else if (value >= (tablePacket?.totalPages || 1)) {
         value = (tablePacket?.totalPages || 1) - 1
       }
+      setPage(value)
       const newPacket = await invokeGetGenPacket(packetId, value)
       console.log("New packet page:", newPacket.page)
-      setPage(newPacket.page || 0)
       setTablePacket(newPacket)
     } catch (error) {
       toast({
@@ -188,10 +189,10 @@ export default function RenderPreview({
     }
   }
 
-  async function doRefresh() {
+  async function doRefresh(rows: number | null = null) {
     setLoading(true)
     try {
-      await onRefresh()
+      await onRefresh(rows)
     } catch (error) {
       console.error("Error refreshing:", error)
     } finally {
@@ -323,16 +324,19 @@ export default function RenderPreview({
               type="number"
               max={99_999}
               min={1}
-              value={noOfRows ?? 1}
-              onChange={(e) => setNoOfRows(Number(e.target.value || NaN))}
+              value={noOfRowsInput ?? noOfRows ?? 0}
+              onChange={(e) =>
+                setNoOfRowsInput(e.target.value ? Number(e.target.value) : NaN)
+              }
               onBlur={(e) => {
-                const value = Number(e.target.value)
+                let value = Number(e.target.value)
                 if (value === 0) {
-                  setNoOfRows(1)
+                  value += 1
                 } else if (value >= 99_999) {
-                  setNoOfRows(99_999)
+                  value = 99_999
                 }
-                doRefresh()
+                setNoOfRowsInput(value)
+                doRefresh(value)
               }}
             />
             <span> Rows</span>
@@ -359,11 +363,10 @@ export default function RenderPreview({
               min={0}
               value={page ?? 0}
               onChange={(e) =>
-                setPage(e.target.value ? Number(e.target.value) : Number(NaN))
+                setPage(e.target.value ? Number(e.target.value) : NaN)
               }
               onBlur={(e) => {
-                let value = Number(e.target.value)
-                getNewPacket(value, tablePacket?.id || "")
+                getNewPacket(e.target.value, tablePacket?.id || "")
               }}
             />
             <button

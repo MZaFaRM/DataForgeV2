@@ -30,16 +30,16 @@ export function invokeLoadSpec(dbId: number, tableName: string) {
   })
 }
 
-export function invokeInsertSqlPacket(packetID: string) {
-  return invokeCliRequest<{ packet_id: string }, { pendingWrites: number }>({
+export function invokeInsertSqlPacket(packetId: string) {
+  return invokeCliRequest<{ packetId: string }, { pendingWrites: number }>({
     kind: "set_db_insert",
-    body: { packet_id: packetID },
+    body: { packetId: packetId },
   })
 }
 
-export function invokeExportSqlPacket(packetID: string, path: string) {
-  return invokeCliRequest<{ path: string; packet_id: string }, string>({
+export function invokeExportSqlPacket(packetId: string, path: string) {
+  return invokeCliRequest<{ path: string; packetId: string }, string>({
     kind: "set_db_export",
-    body: { packet_id: packetID, path: path },
+    body: { packetId: packetId, path: path },
   })
 }

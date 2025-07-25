@@ -1,4 +1,4 @@
-import { Menu } from "./components/menu"
+import { Menu } from "./components/custom-menu"
 import { TailwindIndicator } from "./components/tailwind-indicator"
 import { ThemeProvider } from "./components/theme-provider"
 import DashboardPage from "./dashboard/page"

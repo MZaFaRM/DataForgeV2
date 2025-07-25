@@ -204,7 +204,7 @@ class Runner:
     @requires("page", "packet_id", connected=True)
     def _handle_get_gen_packet(self, body: dict) -> dict:
         return self._ok(
-            self.populator.get_packet_page(body["page"], body["packet_id"]).model_dump()
+            self.populator.get_packet_page(body["packet_id"], body["page"]).model_dump()
         )
 
     @requires("table_name", connected=True)

@@ -564,6 +564,7 @@ class ContextFactory:
     table: TableMetadata
     col_spec: ColumnSpec
     entries: dict[str, list[str | None]]
+    filled: list[str]
 
     @property
     def column(self) -> ColumnMetadata:

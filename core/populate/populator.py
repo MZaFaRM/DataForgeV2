@@ -129,6 +129,7 @@ class Populator:
             dbf=dbf,
             table=metadata,
             col_spec=ordered_columns[0],
+            filled=[],
             entries={
                 col.name: [None] * table_spec.no_of_entries
                 for col in table_spec.columns
@@ -143,6 +144,7 @@ class Populator:
 
         for entry_index in range(table_spec.no_of_entries):
             i = 0
+            context.filled = []
             while i < len(gen_fns):
                 try:
                     context.col_spec = ordered_columns[i]
@@ -154,11 +156,12 @@ class Populator:
                         value = next(gen)
                         if self.is_valid(context, value):
                             context.entries[col_spec.name][entry_index] = value
+                            context.filled.append(col_spec.name)
                             i += 1
                             break
 
                     else:
-                        error = f"Failed to populate column '{col_spec.name}' in table '{table_spec.name}'"
+                        error = f"Generated values for {col_spec.name} couldn't meet UNIQUE or MULTI-UNIQUE constraints."
                         if context.column.nullable:
                             raise ValidationWarning(error)
                         else:
@@ -244,11 +247,7 @@ class Populator:
         column = context.column
 
         # UNIQUE check (single-column)
-        if column.unique and context.col_spec.type not in {
-            GType.null,
-            GType.autoincrement,
-            GType.computed,
-        }:
+        if column.unique and value is not None:
             seen_key = f"{table_name}.{column_name}"
             seen: set = self.fetch_existing_values(context, key=seen_key)
 
@@ -259,6 +258,48 @@ class Populator:
             # Check earlier generated entries in current session
             if value in context.entries[column_name][:row_idx]:
                 return False
+
+        if column.multi_unique and value is not None:
+            sibling_columns = list(column.multi_unique)
+            if column_name not in sibling_columns:
+                sibling_columns.append(column_name)
+
+            # Skip check if any sibling is not yet filled
+            if any(
+                sibling != column_name and sibling not in context.filled
+                for sibling in sibling_columns
+            ):
+                return True
+
+            # Build tuple for the current row
+            current_row = tuple(
+                value if sibling == column_name else context.entries[sibling][row_idx]
+                for sibling in sibling_columns
+            )
+
+            # Skip if any value is None
+            if any(v is None for v in current_row):
+                return True
+
+            # Check against previously generated rows
+            for i in range(row_idx):
+                prev_row = tuple(
+                    context.entries.get(col, [None] * (i + 1))[i]
+                    for col in sibling_columns
+                )
+
+                if any(v is None for v in prev_row):
+                    continue
+
+                if prev_row == current_row:
+                    return False
+
+            # Check each part of the tuple in DB
+            for sibling, val in zip(sibling_columns, current_row):
+                seen_key = f"{table_name}.{sibling}"
+                seen = self.fetch_existing_values(context, key=seen_key)
+                if val in seen:
+                    return False
 
         return True
 

@@ -64,6 +64,7 @@ export default function InsertionPanel({
   useEffect(() => {
     getTimeOfDay()
     updateSize()
+    handleTabChange(activeTab)
     window.addEventListener("resize", updateSize)
     return () => window.removeEventListener("resize", updateSize)
   }, [])
@@ -249,7 +250,7 @@ export default function InsertionPanel({
 
     const newTableSpec: TableSpec = {
       name: specEntry.name,
-      noOfEntries: rows || specEntry.noOfEntries || 50,
+      noOfEntries: rows || specEntry.noOfEntries || 25,
       pageSize: 250,
       columns: Object.values(specEntry?.columns ?? []) as ColumnSpec[],
     }

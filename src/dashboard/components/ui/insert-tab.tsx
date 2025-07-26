@@ -291,8 +291,21 @@ function RenderGenerator({
   setSelected,
   fakerMethods,
 }: RenderGeneratorProps) {
+  const [generatorInput, setGeneratorInput] = useState<string | null>(null)
   const [open, setOpen] = useState(false)
   const { theme } = useTheme()
+  const pythonPlaceholder = [
+    "# You can use builtins + faker",
+    "# Python generators run *after* faker, foreign, regex, etc.",
+    "# For reproducible randomness, use the SEED variable like:",
+    "#   import random; random.seed(SEED)",
+    "#   faker.seed_instance(SEED)",
+    "# Use @order(int) to set execution order between python generators",
+    "# Example:",
+    "#   @order(1)",
+    "#   def generator(columns):",
+    '#       return columns["name"].lower() + "@x.com\n\n',
+  ].join("\n")
 
   useEffect(() => {
     if (generatorType === "foreign") {
@@ -382,10 +395,19 @@ function RenderGenerator({
         </div>
         <Input
           placeholder={"Regex (Python engine)"}
-          value={selected ? selected.slice(1, -1) : ""}
-          onChange={(e) => setSelected("^" + e.target.value + "$")}
+          value={
+            generatorInput
+              ? generatorInput.slice(1, -1)
+              : selected
+                ? selected.slice(1, -1)
+                : ""
+          }
+          onChange={(e) => setGeneratorInput("^" + e.target.value + "$")}
           height="auto"
           className="rounded-none border-0 text-green-400"
+          onBlur={() => {
+            setSelected(generatorInput)
+          }}
         />
         <div className="flex w-10">
           <Icon icon="bx:dollar" className="m-auto h-4 w-4" />
@@ -395,38 +417,16 @@ function RenderGenerator({
   ) : generatorType === "python" ? (
     <div className="w-[350px] overflow-clip rounded border">
       <CodeMirror
-        placeholder={[
-          "# You can use builtins + faker",
-          "# Python generators run *after* faker, foreign, regex, etc.",
-          "# For reproducible randomness, use the SEED variable like:",
-          "#   import random; random.seed(SEED)",
-          "#   faker.seed_instance(SEED)",
-          "# Use @order(int) to set execution order between python generators",
-          "# Example:",
-          "#   @order(1)",
-          "#   def generator(columns):",
-          '#       return columns["name"].lower() + "@x.com\n\n',
-        ].join("\n")}
-        value={
-          selected ||
-          [
-            "# You can use builtins + faker",
-            "# Python generators run *after* faker, foreign, regex, etc.",  
-            "# For reproducible randomness, use the SEED variable like:",
-            "#   import random; random.seed(SEED)",
-            "#   faker.seed_instance(SEED)",
-            "# Use @order(int) to set execution order between python generators",
-            "# Example:",
-            "#   @order(1)",
-            "#   def generator(columns):",
-            '#       return columns["name"].lower() + "@x.com\n\n',
-          ].join("\n")
-        }
-        onChange={setSelected}
+        placeholder={pythonPlaceholder}
+        value={generatorInput || selected || ""}
+        onChange={setGeneratorInput}
         extensions={[python()]}
         theme={theme === "light" ? githubLight : githubDark}
         height="auto"
         minHeight="50px"
+        onBlur={() => {
+          setSelected(generatorInput)
+        }}
         maxHeight="200px"
         maxWidth="350px"
         basicSetup={{

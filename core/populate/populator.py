@@ -48,51 +48,48 @@ class Populator:
         table_spec.db_id = dbf.id
         progress["status"] = "validating"
         _errors, ordered_columns = self._validate_and_sort_specs(table_spec.columns)
-        
+
         progress["status"] = "building"
         errors, column_entries = self.build_table_entries(
             dbf, ordered_columns, table_spec, progress
         )
 
-        progress["status"] = "arranging"
         columns = list(column_entries.keys())
         rows = list(map(list, zip(*column_entries.values())))
 
-        progress["status"] = "paginating"
-        table_packet = self.paginate_table_packet(
-            table_spec, columns, rows, errors + _errors
+        return table_spec, TablePacket(
+            id=str(uuid.uuid4()),
+            name=table_spec.name,
+            columns=columns,
+            entries=rows,
+            errors=errors,
+            page_size=table_spec.page_size,
+            page=0,
+            total_entries=len(rows),
+            total_pages=1,
         )
-        progress["status"] = "completed"
-        return (table_spec, table_packet)
 
-    def paginate_table_packet(
-        self,
-        table_spec: TableSpec,
-        columns: list[str],
-        entries: list[list[str | None]],
-        errors: list[ErrorPacket],
-    ) -> TablePacket:
-        page_size = table_spec.page_size
-        total_entries = len(entries)
-
+    def paginate_table_packet(self, packet: TablePacket) -> TablePacket:
+        page_size = packet.page_size
+        total_entries = len(packet.entries)
+        total_pages = (total_entries + page_size - 1) // page_size
         id = str(uuid.uuid4())
-        _split_entries = [
-            entries[i : i + page_size] for i in range(0, total_entries, page_size)
-        ]
-        total_pages = len(_split_entries)
+
         self._cached_packets = [
             TablePacket(
                 id=id,
-                name=table_spec.name,
-                columns=columns,
-                entries=_split_entries[i],
-                errors=errors,
-                page=i,
+                name=packet.name,
+                columns=packet.columns,
+                entries=packet.entries[i : i + page_size],
+                errors=packet.errors,
+                page=page_idx,
+                page_size=page_size,
                 total_entries=total_entries,
                 total_pages=total_pages,
             )
-            for i in range(total_pages)
+            for page_idx, i in enumerate(range(0, total_entries, page_size))
         ]
+
         return self._cached_packets[0]
 
     def get_packet_page(self, packet_id: str, page: int | None = None) -> TablePacket:
@@ -114,16 +111,8 @@ class Populator:
         if packet.id == packet_id:
             if page is None:
                 entries = [entry for p in self._cached_packets for entry in p.entries]
-                return TablePacket(
-                    id=packet.id,
-                    name=packet.name,
-                    columns=packet.columns,
-                    entries=entries,
-                    errors=packet.errors,
-                    page=packet.page,
-                    total_entries=packet.total_entries,
-                    total_pages=packet.total_pages,
-                )
+                packet.entries = entries
+                return packet
             return packet
 
         raise ValueError(f"No packet found for ID {packet_id} on page {page}.")

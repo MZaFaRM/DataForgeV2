@@ -214,18 +214,7 @@ class Runner:
                     dbf, TableSpec(**spec_dict), progress=progress
                 )
                 dbf.registry.save_specs(specs)
-                q.put(
-                    Response(
-                        status="ok",
-                        payload={
-                            "status": "done",
-                            "message": "Generation completed successfully.",
-                            "job_id": self._generation_id,
-                            "data": packet.model_dump(),
-                            "progress": dict(progress),
-                        },
-                    ).to_dict()
-                )
+                q.put(packet)
             except Exception as e:
                 q.put(Response(status="error", error=str(e)).to_dict())
 
@@ -283,22 +272,29 @@ class Runner:
         ):
             return self._err("Invalid job.")
 
+        response = {
+            "status": "pending",
+            "message": "Generation is still in progress.",
+            "job_id": self._generation_id,
+            "data": None,
+        }
+        if hasattr(self, "_progress"):
+            response["progress"] = dict(self._progress)
+
         if self._result_queue.empty():
             if hasattr(self, "_active_process") and self._active_process.is_alive():
-                response = {
-                    "status": "pending",
-                    "message": "Generation is still in progress.",
-                    "job_id": self._generation_id,
-                    "data": None,
-                }
-
-                if hasattr(self, "_progress"):
-                    response["progress"] = dict(self._progress)
-
                 return self._ok(response)
-
             return self._err("No result. Process may not have started or crashed.")
-        return self._result_queue.get()
+
+        paginated = self.populator.paginate_table_packet(self._result_queue.get())
+        response.update(
+            {
+                "status": "done",
+                "message": "Generation completed successfully.",
+                "data": paginated,
+            }
+        )
+        return self._ok(response)
 
     @requires("table_name", connected=True)
     def _handle_get_pref_spec(self, body: dict) -> dict:

@@ -37,7 +37,7 @@ import {
 } from "@/components/types"
 
 interface RenderPreviewProps {
-  tableSpec: TableSpecEntry
+  tableSpec: TableSpecEntry | null
   onInserted: () => void
   setPendingWrites: (n: number) => void
   noOfRows: number | null
@@ -68,7 +68,7 @@ export default function RenderPreview({
 
   useEffect(() => {
     setTablePacket(null)
-  }, [tableSpec.name])
+  }, [tableSpec?.name])
 
   useEffect(() => {
     if (tablePacket) {
@@ -138,7 +138,7 @@ export default function RenderPreview({
           }
         })
         .catch((error) => {
-          console.error("❌ Error fetching generation result:", error)
+          console.error("Error fetching generation result:", error)
           setLoading(false)
           clearInterval(interval)
           setPendingJobId(null)
@@ -189,7 +189,7 @@ export default function RenderPreview({
 
     const newTableSpec: TableSpec = {
       name: specEntry.name,
-      noOfEntries: rows || specEntry.noOfEntries || 25,
+      noOfEntries: noOfRowsInput || rows || specEntry.noOfEntries || 25,
       pageSize: 250,
       columns: Object.values(specEntry?.columns ?? []) as ColumnSpec[],
     }
@@ -263,7 +263,9 @@ export default function RenderPreview({
   }
 
   return (
-    <div className={cn("flex h-full flex-col", loading && "cursor-wait")}>
+    <div
+      className={cn("flex h-full flex-col", loading && "cursor-wait")}
+    >
       <div
         className={cn(
           "bg-current-foreground flex h-full flex-col items-center justify-center rounded-md bg-gradient-to-br text-gray-800",
@@ -278,7 +280,7 @@ export default function RenderPreview({
           Hang tight. This may take a while.
         </p>
         <div className="w-full max-w-lg">
-          <div className="w-full mt-4 flex justify-between space-x-2 text-foreground">
+          <div className="mt-4 flex w-full justify-between space-x-2 text-foreground">
             <p>{progress?.status + "..."}</p>
             <p>{progress?.column}</p>
           </div>
@@ -381,152 +383,149 @@ export default function RenderPreview({
             </p>
           </div>
         )}
-        <div className="sticky bottom-0 mt-auto flex items-center justify-center bg-muted p-2">
-          <div>
-            <button
-              className={cn(
-                "inline-flex items-center space-x-2 rounded-md border px-3 py-2 text-sm",
-                "font-medium hover:bg-accent hover:text-accent-foreground",
-                "disabled:cursor-not-allowed disabled:opacity-50",
-                needsRefresh && "bg-purple-500 text-white"
-              )}
-              disabled={loading}
-              onClick={() => {
-                HandleGenerateTablePackets()
+      </div>
+      <div className="sticky bottom-0 mt-auto flex items-center justify-center bg-muted p-2">
+        <div>
+          <button
+            className={cn(
+              "inline-flex items-center space-x-2 rounded-md border px-3 py-2 text-sm",
+              "font-medium hover:bg-accent hover:text-accent-foreground",
+              "disabled:cursor-not-allowed disabled:opacity-50",
+              needsRefresh && "bg-purple-500 text-white"
+            )}
+            disabled={loading}
+            onClick={() => {
+              HandleGenerateTablePackets()
+            }}
+          >
+            <Icon
+              icon="streamline-ultimate:factory-industrial-robot-arm-1-bold"
+              className={cn("h-4 w-4", !needsRefresh && "text-purple-500")}
+            />
+            <span>Generate</span>
+          </button>
+        </div>
+        <div>
+          <div
+            className={cn(
+              "inline-flex items-center space-x-2 rounded-md border px-3 py-2",
+              "text-sm font-medium hover:bg-accent hover:text-accent-foreground",
+              "ml-4"
+            )}
+          >
+            <Icon
+              icon="material-symbols:add-row-below"
+              className={cn("h-4 w-4 text-foreground")}
+            />
+            <input
+              type="number"
+              max={99_999}
+              min={1}
+              value={noOfRowsInput ?? noOfRows ?? 0}
+              onChange={(e) =>
+                setNoOfRowsInput(e.target.value ? Number(e.target.value) : NaN)
+              }
+              onBlur={(e) => {
+                let value = Number(e.target.value)
+                if (value === 0) {
+                  value += 1
+                } else if (value >= 99_999) {
+                  value = 99_999
+                }
+                setNoOfRowsInput(value)
               }}
+            />
+            <span> Rows</span>
+          </div>
+        </div>
+        <div className="ml-auto">
+          <div className="flex flex-row items-center space-x-2">
+            <button
+              disabled={page <= 0}
+              onClick={() => getNewPacket(page - 1, tablePacket?.id || "")}
+              className="disabled:cursor-not-allowed disabled:opacity-50"
             >
               <Icon
-                icon="streamline-ultimate:factory-industrial-robot-arm-1-bold"
-                className={cn("h-4 w-4", !needsRefresh && "text-purple-500")}
+                icon="streamline:move-left-solid"
+                className="mr-1 h-5 w-5 text-purple-500"
               />
-              <span>Generate</span>
+            </button>
+            <span className="text-muted-foreground">
+              {(tablePacket?.totalPages || 1) - 1} /
+            </span>
+            <input
+              type="number"
+              max={tablePacket?.totalPages || 99}
+              min={0}
+              value={page ?? 0}
+              onChange={(e) =>
+                setPage(e.target.value ? Number(e.target.value) : NaN)
+              }
+              onBlur={(e) => {
+                getNewPacket(e.target.value, tablePacket?.id || "")
+              }}
+            />
+            <button
+              disabled={page >= (tablePacket?.totalPages || 1) - 1}
+              onClick={() => getNewPacket(page + 1, tablePacket?.id || "")}
+              className="disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              <Icon
+                icon="streamline:move-right-solid"
+                className="ml-1 h-5 w-5 text-purple-500"
+              />
             </button>
           </div>
-          <div>
-            <div
-              className={cn(
-                "inline-flex items-center space-x-2 rounded-md border px-3 py-2",
-                "text-sm font-medium hover:bg-accent hover:text-accent-foreground",
-                "ml-4"
-              )}
-            >
+        </div>
+        <div className="ml-auto">
+          <div className="flex items-center space-x-2">
+            {showCheck && (
               <Icon
-                icon="material-symbols:add-row-below"
-                className={cn("h-4 w-4 text-foreground")}
+                icon="lets-icons:check-fill"
+                className="mr-4 h-6 w-6 animate-fade-in-out-once text-green-500"
               />
-              <input
-                type="number"
-                max={99_999}
-                min={1}
-                value={noOfRowsInput ?? noOfRows ?? 0}
-                onChange={(e) =>
-                  setNoOfRowsInput(
-                    e.target.value ? Number(e.target.value) : NaN
-                  )
-                }
-                onBlur={(e) => {
-                  let value = Number(e.target.value)
-                  if (value === 0) {
-                    value += 1
-                  } else if (value >= 99_999) {
-                    value = 99_999
-                  }
-                  setNoOfRowsInput(value)
-                  HandleGenerateTablePackets(null, value)
-                }}
-              />
-              <span> Rows</span>
-            </div>
-          </div>
-          <div className="ml-auto">
-            <div className="flex flex-row items-center space-x-2">
+            )}
+            {errorCols && Object.keys(errorCols).length > 0 ? (
+              <Icon icon="jam:alert" className="h-5 w-5 text-red-500" />
+            ) : warnCols && Object.keys(warnCols).length > 0 ? (
+              <Icon icon="jam:alert" className="h-5 w-5 text-yellow-500" />
+            ) : null}
+            <div className="inline-flex overflow-hidden rounded-md border bg-purple-500 text-white">
               <button
-                disabled={page <= 0}
-                onClick={() => getNewPacket(page - 1, tablePacket?.id || "")}
-                className="disabled:cursor-not-allowed disabled:opacity-50"
+                onClick={handleInsertPacket}
+                disabled={!tablePacket || loading}
+                className={cn(
+                  "flex w-[145px] items-center px-3 py-2",
+                  "text-sm font-medium hover:bg-purple-600",
+                  loading && "cursor-wait opacity-50",
+                  !tablePacket && "cursor-not-allowed opacity-50"
+                )}
               >
-                <Icon
-                  icon="streamline:move-left-solid"
-                  className="mr-1 h-5 w-5 text-purple-500"
-                />
+                <Icon icon="proicons:database-add" className="mr-2 h-4 w-4" />
+                Insert into DB
               </button>
-              <span className="text-muted-foreground">
-                {(tablePacket?.totalPages || 1) - 1} /
-              </span>
-              <input
-                type="number"
-                max={tablePacket?.totalPages || 99}
-                min={0}
-                value={page ?? 0}
-                onChange={(e) =>
-                  setPage(e.target.value ? Number(e.target.value) : NaN)
-                }
-                onBlur={(e) => {
-                  getNewPacket(e.target.value, tablePacket?.id || "")
-                }}
-              />
-              <button
-                disabled={page >= (tablePacket?.totalPages || 1) - 1}
-                onClick={() => getNewPacket(page + 1, tablePacket?.id || "")}
-                className="disabled:cursor-not-allowed disabled:opacity-50"
-              >
-                <Icon
-                  icon="streamline:move-right-solid"
-                  className="ml-1 h-5 w-5 text-purple-500"
-                />
-              </button>
-            </div>
-          </div>
-          <div className="ml-auto">
-            <div className="flex items-center space-x-2">
-              {showCheck && (
-                <Icon
-                  icon="lets-icons:check-fill"
-                  className="mr-4 h-6 w-6 animate-fade-in-out-once text-green-500"
-                />
-              )}
-              {errorCols && Object.keys(errorCols).length > 0 ? (
-                <Icon icon="jam:alert" className="h-5 w-5 text-red-500" />
-              ) : warnCols && Object.keys(warnCols).length > 0 ? (
-                <Icon icon="jam:alert" className="h-5 w-5 text-yellow-500" />
-              ) : null}
-              <div className="inline-flex overflow-hidden rounded-md border bg-purple-500 text-white">
-                <button
-                  onClick={handleInsertPacket}
-                  disabled={!tablePacket || loading}
-                  className={cn(
-                    "flex w-[145px] items-center px-3 py-2",
-                    "text-sm font-medium hover:bg-purple-600",
-                    loading && "cursor-wait opacity-50",
-                    !tablePacket && "cursor-not-allowed opacity-50"
-                  )}
-                >
-                  <Icon icon="proicons:database-add" className="mr-2 h-4 w-4" />
-                  Insert into DB
-                </button>
 
-                <DropdownMenu>
-                  <DropdownMenuTrigger asChild>
-                    <button
-                      className="flex items-center border-l px-2 py-2 hover:bg-purple-600"
-                      onClick={(e) => e.preventDefault()}
-                    >
-                      <Icon icon="mdi:chevron-down" className="h-4 w-4" />
-                    </button>
-                  </DropdownMenuTrigger>
-                  <DropdownMenuContent
-                    style={{ marginLeft: "-146px", width: "180px" }}
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <button
+                    className="flex items-center border-l px-2 py-2 hover:bg-purple-600"
+                    onClick={(e) => e.preventDefault()}
                   >
-                    <DropdownMenuItem
-                      onSelect={handleSaveToFile}
-                      disabled={!tablePacket || loading}
-                    >
-                      <Icon icon="mdi:file-export" className="mr-4 h-4 w-4" />
-                      Export SQL
-                    </DropdownMenuItem>
-                  </DropdownMenuContent>
-                </DropdownMenu>
-              </div>
+                    <Icon icon="mdi:chevron-down" className="h-4 w-4" />
+                  </button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent
+                  style={{ marginLeft: "-146px", width: "180px" }}
+                >
+                  <DropdownMenuItem
+                    onSelect={handleSaveToFile}
+                    disabled={!tablePacket || loading}
+                  >
+                    <Icon icon="mdi:file-export" className="mr-4 h-4 w-4" />
+                    Export SQL
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
             </div>
           </div>
         </div>

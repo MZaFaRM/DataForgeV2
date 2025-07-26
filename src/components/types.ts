@@ -121,6 +121,7 @@ export interface TablePacket {
   errors: ErrorPacket[] | null
 
   page: number
+  pageSize: number
   totalPages: number
   totalEntries: number
 }

@@ -88,6 +88,7 @@ class TablePacket(BaseModel):
     errors: list[ErrorPacket] = []
 
     page: int
+    page_size: int
     total_pages: int
     total_entries: int
 

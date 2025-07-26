@@ -15,8 +15,6 @@ from core.populate.factory import DatabaseFactory
 from core.utils.response import Request, Response
 
 
-
-
 class Runner:
     def __init__(self):
         self.dbf = DatabaseFactory()
@@ -37,13 +35,13 @@ class Runner:
                 req = Request(**req)
                 _id = req.id
                 res_obj = self.handle_command(req)
-                
+
                 res_obj["id"] = _id
                 res = json.dumps(res_obj)
             except Exception as e:
                 tb = traceback.format_exc()
                 res_obj = Response(status="error", error=str(e), traceback=tb).to_dict()
-                
+
                 res_obj["id"] = _id
                 res = json.dumps(res_obj)
             finally:
@@ -79,6 +77,21 @@ class Runner:
     @requires()
     def _handle_get_gen_methods(self, _=None) -> dict:
         return self._ok(self.populator.methods)
+
+    @requires()
+    def _handle_get_db_last_connected(self, _=None) -> dict:
+        last_connected = self.dbf.registry.last_connected()
+        if not last_connected:
+            return self._ok(None)
+        else:
+            self.dbf.from_schema(last_connected)
+            try:
+                self.dbf.test_connection()
+                return self._ok(last_connected.model_dump())
+            except Exception as e:
+                self.dbf.disconnect()
+                return self._err(f"Failed to connect to last connected database: {str(e)}")
+            
 
     @requires("host", "user", "port", "name", "password")
     def _handle_set_db_connect(self, creds: dict) -> dict:

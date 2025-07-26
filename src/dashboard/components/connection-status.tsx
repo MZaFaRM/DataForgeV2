@@ -1,29 +1,21 @@
-import { useEffect, useRef, useState } from "react"
+import { useEffect, useState } from "react"
 import {
   invokeDbConnection,
   invokeDbDeletion,
   invokeDbDisconnect,
   invokeDbInfo,
   invokeDbReconnection,
+  invokeGetLastConnected,
   invokeListDbCreds,
 } from "@/api/db"
 import { Icon } from "@iconify/react"
 import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuSeparator,
-} from "@radix-ui/react-dropdown-menu"
-import {
   CaretSortIcon,
   CheckIcon,
-  ColumnSpacingIcon,
-  PlusCircledIcon,
 } from "@radix-ui/react-icons"
 import { Eye, EyeOff } from "lucide-react"
 
 import { cn } from "@/lib/utils"
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { Button } from "@/components/ui/button"
 import {
   Command,
@@ -43,7 +35,6 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog"
-import { DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import {
@@ -72,10 +63,24 @@ export default function ConnectionSelector({
   const [dbList, setDbList] = useState<DBCreds[]>([])
 
   useEffect(() => {
-    console.log("ID:", dbCreds?.id)
     handleListDbCreds()
     handleSavedDbCreds()
+    handleLastConnected()
   }, [])
+
+  async function handleLastConnected() {
+    try {
+      const lastConnected = await invokeGetLastConnected()
+      if (lastConnected && Object.keys(lastConnected).length > 0) {
+        updateDb(lastConnected)
+        console.log("Last connected database:", lastConnected)
+      } else {
+        console.warn("No last connected database found.")
+      }
+    } catch (error) {
+      console.error("Error fetching last connected database:", error)
+    }
+  }
 
   function handleErrorField(error: string) {
     if (

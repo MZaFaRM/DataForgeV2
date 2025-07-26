@@ -12,6 +12,12 @@ export function invokeDbInfo() {
   return invokeCliRequest<void, DBCreds>({ kind: "get_db_info" })
 }
 
+export function invokeGetLastConnected() {
+  return invokeCliRequest<void, DBCreds | null>({
+    kind: "get_db_last_connected",
+  })
+}
+
 export function invokeDbConnection(dbCreds: DBCreds) {
   return invokeCliRequest<DBCreds, DBCreds>({
     kind: "set_db_connect",

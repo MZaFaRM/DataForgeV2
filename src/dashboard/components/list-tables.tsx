@@ -49,6 +49,7 @@ export default function ListTables({
       setActiveTable(null)
     } else {
       fetchTables()
+      console.log("Fetching tables for:", dbCreds.name)
     }
   }, [dbCreds])
 

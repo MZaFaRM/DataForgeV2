@@ -27,6 +27,7 @@ class DbCredsModel(Base):
     port = Column(String, nullable=False)
     user = Column(String, nullable=False)
     _password = Column("password", String, nullable=False)
+    last_connected = Column(DateTime, nullable=False, server_default=func.now(), onupdate=func.now())
 
     __tablename__ = "db_creds"
     __table_args__ = (UniqueConstraint("name", "host", "port", name="uq_dbcreds_identity"),)

@@ -52,7 +52,10 @@ export default function DashboardPage() {
               dbCreds={dbCreds}
               updateDb={(val) => {
                 setDbCreds(val)
-                fetchUsageInfo()
+                if (val) {
+                  setActiveTable(null)
+                  fetchUsageInfo()
+                }
               }}
             />
           </div>

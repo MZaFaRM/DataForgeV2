@@ -1,10 +1,14 @@
 import json
+from multiprocessing import Manager, Process, Queue
+from multiprocessing.managers import DictProxy
 import os
 from pathlib import Path
+from random import SystemRandom
 import sys
 import threading
 import traceback
 from typing import Any
+import uuid
 
 from core.helpers import requires
 from core.settings import LOG_PATH
@@ -197,15 +201,104 @@ class Runner:
 
     @requires(TableSpec, connected=True)
     def _handle_get_gen_packets(self, body: dict) -> dict:
-        specs, result = self.populator.build_packets(self.dbf, TableSpec(**body))
-        self.dbf.registry.save_specs(specs)
-        return self._ok(result.model_dump())
+        if hasattr(self, "_active_process") and self._active_process.is_alive():
+            return self._err("Generation is already running.")
+
+        self._generation_id = str(uuid.uuid4())
+        self._result_queue = Queue()
+
+        def target(q, dbf: DatabaseFactory, spec_dict: dict, seed: int, progress: dict):
+            try:
+                pop = Populator(seed=seed)
+                specs, packet = pop.build_packets(
+                    dbf, TableSpec(**spec_dict), progress=progress
+                )
+                dbf.registry.save_specs(specs)
+                q.put(
+                    Response(
+                        status="ok",
+                        payload={
+                            "status": "done",
+                            "message": "Generation completed successfully.",
+                            "job_id": self._generation_id,
+                            "data": packet.model_dump(),
+                            "progress": dict(progress),
+                        },
+                    ).to_dict()
+                )
+            except Exception as e:
+                q.put(Response(status="error", error=str(e)).to_dict())
+
+        self._progress = Manager().dict()
+        self._progress.update(
+            {
+                "status": "starting",
+                "row": 0,
+                "total": body["no_of_entries"],
+                "column": None,
+            }
+        )
+        self._active_process = Process(
+            target=target,
+            args=(
+                self._result_queue,
+                self.dbf,
+                body,
+                SystemRandom().randint(1, 999999999),
+                self._progress,
+            ),
+        )
+        self._active_process.start()
+
+        return self._ok(
+            {
+                "status": "pending",
+                "message": "Generation started.",
+                "job_id": self._generation_id,
+                "data": None,
+                "progress": dict(self._progress),
+            }
+        )
 
     @requires("page", "packet_id", connected=True)
     def _handle_get_gen_packet(self, body: dict) -> dict:
         return self._ok(
             self.populator.get_packet_page(body["packet_id"], body["page"]).model_dump()
         )
+
+    @requires()
+    def _handle_kill_gen_packets(self, _=None) -> dict:
+        if hasattr(self, "_active_process") and self._active_process.is_alive():
+            self._active_process.terminate()
+            self._active_process.join()
+            return self._ok("Generation process killed.")
+        return self._err("No active generation process to kill.")
+
+    @requires("job_id")
+    def _handle_poll_gen_status(self, body: dict) -> dict:
+        if (
+            not hasattr(self, "_generation_id")
+            or body.get("job_id") != self._generation_id
+            or not hasattr(self, "_result_queue")
+        ):
+            return self._err("Invalid job.")
+
+        if self._result_queue.empty():
+            if hasattr(self, "_active_process") and self._active_process.is_alive():
+                response = {
+                    "status": "pending",
+                    "message": "Generation is still in progress.",
+                    "job_id": self._generation_id,
+                    "data": None,
+                }
+
+                if hasattr(self, "_progress"):
+                    response["progress"] = dict(self._progress)
+
+                return self._ok(response)
+
+            return self._err("No result. Process may not have started or crashed.")
+        return self._result_queue.get()
 
     @requires("table_name", connected=True)
     def _handle_get_pref_spec(self, body: dict) -> dict:

@@ -97,17 +97,32 @@ export interface ErrorPacket {
 
 export type ErrorPacketMap = Record<string, ErrorPacket[]>
 
+export interface PacketProgress {
+  status: string
+  jobId: string
+  row: number
+  total: number
+  column: string | null
+}
+
+export interface TablePacketRequest {
+  status: "done" | "pending"
+  message: string
+  jobId: string
+  data: TablePacket | null
+  progress: PacketProgress
+}
+
 export interface TablePacket {
   id: string
   name: string
-  columns: string[]
+  columns: string[] | null
   entries: (string | null)[][]
-  errors: ErrorPacket[]
+  errors: ErrorPacket[] | null
 
   page: number
   totalPages: number
   totalEntries: number
-
 }
 
 export interface SqlLog {

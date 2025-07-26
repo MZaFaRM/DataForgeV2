@@ -1,4 +1,4 @@
-import { TablePacket, TableSpec } from "@/components/types"
+import { PacketProgress, TablePacket, TablePacketRequest, TableSpec } from "@/components/types"
 
 import { invokeCliRequest } from "./cli"
 
@@ -7,7 +7,7 @@ export function invokeGetFakerMethods() {
 }
 
 export function invokeGenPackets(tableSpec: TableSpec) {
-  return invokeCliRequest<TableSpec, TablePacket>({
+  return invokeCliRequest<TableSpec, PacketProgress>({
     kind: "get_gen_packets",
     body: tableSpec,
   })
@@ -41,5 +41,18 @@ export function invokeExportSqlPacket(packetId: string, path: string) {
   return invokeCliRequest<{ path: string; packetId: string }, string>({
     kind: "set_db_export",
     body: { packetId: packetId, path: path },
+  })
+}
+
+export function invokeKillGenPackets() {
+  return invokeCliRequest<void, string>({
+    kind: "kill_gen_packets",
+  })
+}
+
+export function invokeGetGenResult(jobId: string) {
+  return invokeCliRequest<{ jobId: string }, TablePacketRequest>({
+    kind: "poll_gen_status",
+    body: { jobId: jobId },
   })
 }

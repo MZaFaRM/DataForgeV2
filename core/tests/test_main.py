@@ -168,11 +168,6 @@ def test_empty_get_gen_packets(runner: Runner):
     }
     response = runner.handle_command(Request(kind="get_gen_packets", body=body))
     assert response["status"] == "ok", f"Load spec failed: {response['error']}"
-    assert tuple(response["payload"]["entries"][0][:3]) == (
-        None,
-        None,
-        None,
-    ), response["payload"]["entries"][0][:3]
 
 
 def test_get_gen_packets(runner: Runner):
@@ -281,7 +276,9 @@ def test_get_gen_packets_order(runner: Runner):
     assert res["status"] == "ok", res["error"]
 
     # load user table spec
-    req = Request(kind="get_pref_spec", body={"dbId": runner.dbf.id, "tableName": "user"})
+    req = Request(
+        kind="get_pref_spec", body={"dbId": runner.dbf.id, "tableName": "user"}
+    )
     res = runner.handle_command(req)
     assert res["status"] == "ok", f"Load spec failed: {res['error']}"
 

@@ -395,20 +395,32 @@ function RenderGenerator({
   ) : generatorType === "python" ? (
     <div className="w-[350px] overflow-clip rounded border">
       <CodeMirror
-        placeholder={
-          "# import builtins + faker\n" +
-          "# Py fields run after faker/foreign/regex/etc\n" +
-          "# @order(int) → set execution order\n" +
-          "# def generator(columns):\n" +
-          '#   return columns["name"].lower() + "@x.com"\n\n'
-        }
+        placeholder={[
+          "# You can use builtins + faker",
+          "# Python generators run *after* faker, foreign, regex, etc.",
+          "# For reproducible randomness, use the SEED variable like:",
+          "#   import random; random.seed(SEED)",
+          "#   faker.seed_instance(SEED)",
+          "# Use @order(int) to set execution order between python generators",
+          "# Example:",
+          "#   @order(1)",
+          "#   def generator(columns):",
+          '#       return columns["name"].lower() + "@x.com\n\n',
+        ].join("\n")}
         value={
           selected ||
-          "# import builtins + faker\n" +
-            "# Py fields run after faker/foreign/regex/etc\n" +
-            "# @order(int) → set execution order\n" +
-            "# def generator(columns):\n" +
-            '#   return columns["name"].lower() + "@x.com"\n'
+          [
+            "# You can use builtins + faker",
+            "# Python generators run *after* faker, foreign, regex, etc.",  
+            "# For reproducible randomness, use the SEED variable like:",
+            "#   import random; random.seed(SEED)",
+            "#   faker.seed_instance(SEED)",
+            "# Use @order(int) to set execution order between python generators",
+            "# Example:",
+            "#   @order(1)",
+            "#   def generator(columns):",
+            '#       return columns["name"].lower() + "@x.com\n\n',
+          ].join("\n")
         }
         onChange={setSelected}
         extensions={[python()]}

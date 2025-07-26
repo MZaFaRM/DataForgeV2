@@ -288,7 +288,7 @@ export default function ConnectionSelector({
                       dbConnecting && "animate-spin"
                     )}
                   />
-                  Refresh
+                  
                 </CommandItem>
                 {dbCreds?.name && (
                   <>

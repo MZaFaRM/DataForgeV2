@@ -55,9 +55,7 @@ export default function InsertionPanel({
   const [activeTab, setActiveTab] = useState<string>("insert")
   const [globalSpecs, setGlobalSpecs] = useState<TableSpecMap>({})
   const [tableSpec, setTableSpec] = useState<TableSpecEntry | null>(null)
-  const [tablePacket, setTablePacket] = useState<TablePacket | null>(null)
   const [pendingWrites, setPendingWrites] = useState<number>(0)
-  const [needsRefresh, setNeedsRefresh] = useState<boolean>(false)
   const [fakerMethods, setFakerMethods] = useState<string[] | null>(null)
   const [loading, setLoading] = useState<boolean>(false)
 
@@ -72,9 +70,6 @@ export default function InsertionPanel({
   useEffect(() => {
     if (activeTable) {
       saveToGlobal(tableSpec)
-      if (activeTab === "preview") {
-        handleTabChange("insert")
-      }
     }
     fetchActiveTableData()
     // handleTabChange("insert")
@@ -83,13 +78,8 @@ export default function InsertionPanel({
   useEffect(() => {
     setTableData(null)
     setTableSpec(null)
-    setTablePacket(null)
     setGlobalSpecs({})
   }, [dbCreds])
-
-  useEffect(() => {
-    setNeedsRefresh(true)
-  }, [tableSpec, activeTable])
 
   useEffect(() => {
     insertTabRef.current?.scrollTo({
@@ -109,6 +99,14 @@ export default function InsertionPanel({
     })
   }, [activeTable, dbCreds])
 
+  // useEffect(() => {
+  //   previewTabRef.current?.scrollTo({
+  //     top: 0,
+  //     left: 0,
+  //     behavior: "smooth",
+  //   })
+  // }, [tablePacket])
+
   async function handleTabChange(activeTab: string) {
     setActiveTab(activeTab)
     if (activeTab === "insert") {
@@ -120,11 +118,6 @@ export default function InsertionPanel({
           console.error(error)
         }
       }
-    } else if (activeTab == "preview") {
-      if (needsRefresh) {
-        handleVerifyTableSpec(tableSpec)
-        setNeedsRefresh(false)
-      }
     }
   }
 
@@ -132,7 +125,6 @@ export default function InsertionPanel({
     if (!activeTable) {
       setTableData(null)
       setTableSpec(null)
-      setTablePacket(null)
       return
     }
     setLoading(true)
@@ -240,35 +232,6 @@ export default function InsertionPanel({
     }
   }
 
-  async function handleVerifyTableSpec(
-    tSpec: TableSpecEntry | null = null,
-    rows: number | null = null
-  ) {
-    const specEntry = tSpec || tableSpec
-    // console.log("Verifying table spec:", specEntry)
-    if (!specEntry) return
-
-    const newTableSpec: TableSpec = {
-      name: specEntry.name,
-      noOfEntries: rows || specEntry.noOfEntries || 25,
-      pageSize: 250,
-      columns: Object.values(specEntry?.columns ?? []) as ColumnSpec[],
-    }
-    // console.log("Verifying table spec:", newTableSpec)
-    try {
-      const res = await invokeGenPackets(newTableSpec)
-      setTablePacket(res)
-    } catch (error) {
-      console.error("Error verifying spec:", error)
-    }
-
-    previewTabRef.current?.scrollTo({
-      top: 0,
-      left: 0,
-      behavior: "smooth",
-    })
-  }
-
   function getTimeOfDay() {
     const hour = new Date().getHours()
 
@@ -355,7 +318,6 @@ export default function InsertionPanel({
                   pendingWrites={pendingWrites}
                   updatePendingWrites={(val) => {
                     setPendingWrites(val)
-                    handleVerifyTableSpec()
                   }}
                 />
               </div>
@@ -416,9 +378,7 @@ export default function InsertionPanel({
                 )}
               >
                 <RenderPreview
-                  tablePacket={tablePacket}
-                  setTablePacket={setTablePacket}
-                  onRefresh={(rows) => handleVerifyTableSpec(null, rows)}
+                  tableSpec={tableSpec}
                   onInserted={onInserted}
                   noOfRows={tableSpec?.noOfEntries}
                   setPendingWrites={setPendingWrites}

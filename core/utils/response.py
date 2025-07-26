@@ -5,15 +5,13 @@ from typing_extensions import Literal
 
 
 class Response(BaseModel):
-    status: Literal["ok", "error"]
+    status: Literal["ok", "error", "pending"]
     payload: Optional[Any] = None
     error: Optional[str] = None
     traceback: Optional[str] = None
 
     def to_dict(self) -> dict:
         return self.model_dump()
-    
-    
 
 
 class Request(BaseModel):

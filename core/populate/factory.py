@@ -1,53 +1,40 @@
 import ast
-from datetime import datetime
 import logging
-import math
-from multiprocessing import Process, Queue
-import multiprocessing
 import os
 import platform
-from queue import Empty
 import random
 import re
 from collections.abc import Sequence
 from dataclasses import dataclass
+from datetime import datetime
+from multiprocessing import Process, Queue
 from numbers import Number
 from pathlib import Path
-import time
-from typing import Any, Callable, Generator, Literal
+from queue import Empty
+import types
+from typing import Any, Callable, Generator
+from urllib.parse import quote_plus
 
 import faker
 import networkx as nx
-from pymysql import OperationalError
 import rstr
 from faker import Faker
 from networkx import Graph
-from sqlalchemy import Connection, RootTransaction, create_engine, inspect
+from sqlalchemy import Connection, create_engine, inspect
 from sqlalchemy import text as sql_text
 from sqlalchemy.engine import Engine, Inspector
 from sqlalchemy.engine.reflection import Inspector
-from tabulate import tabulate
 
-from core.helpers import cap_numeric, cap_string, safe_eval
+from core.helpers import cap_numeric, cap_string
 from core.populate.config import DBFRegistry
 from core.settings import LOG_PATH
-from core.utils.exceptions import (
-    ManualException,
-    MissingRequiredAttributeError,
-    ValidationWarning,
-    VerificationError,
-)
-from core.utils.types import (
-    ColumnMetadata,
-    ColumnSpec,
-    DbCredsSchema,
-    ErrorPacket,
-    ForeignKeyRef,
-    UsageStatSchema,
-)
+from core.utils.exceptions import (ManualException,
+                                   MissingRequiredAttributeError,
+                                   ValidationWarning, VerificationError)
+from core.utils.types import (ColumnMetadata, ColumnSpec, DbCredsSchema,
+                              ForeignKeyRef)
 from core.utils.types import GeneratorType as GType
-from core.utils.types import TableMetadata, TablePacket
-from urllib.parse import quote_plus
+from core.utils.types import TableMetadata, TablePacket, UsageStatSchema
 
 
 class DatabaseFactory:
@@ -580,8 +567,12 @@ class ContextFactory:
 
 
 class GeneratorFactory:
-    def __init__(self) -> None:
+    def __init__(self, seed: int | None) -> None:
         self.faker = Faker()
+        self.seed = seed
+        
+        if seed is not None:
+            self.faker.seed_instance(seed)
 
     def make(self, type: GType) -> Callable[[ContextFactory], Generator[str | None, None, None]]:
         make_fn = getattr(self, f"make_{type.value}", None)
@@ -603,10 +594,11 @@ class GeneratorFactory:
     def make_python(self, context: ContextFactory) -> Generator[str | None, None, None]:
         try:
             tree = ast.parse(context.col_spec.generator or "")
-
+                        
             # Prepare the environment for execution
             env = {
                 "faker": faker,
+                "SEED": self.seed,
                 "columns": {},
                 "order": lambda x: (lambda f: f),
                 "__builtins__": __builtins__,

@@ -1,5 +1,6 @@
 from collections import OrderedDict
 import contextlib
+from random import SystemRandom
 from typing import Any
 import uuid
 
@@ -14,10 +15,14 @@ from .factory import ContextFactory, DatabaseFactory, GeneratorFactory
 
 
 class Populator:
-    def __init__(self):
+    def __init__(self, seed: int | None = None):
         self.faker = Faker()
+        self.seed = seed
+        if seed is not None:
+            self.faker.seed_instance(seed)
+
         self.cache = {}
-        self.tf = GeneratorFactory()
+        self.tf = GeneratorFactory(self.seed)
 
     @property
     def methods(self) -> list[str]:
@@ -32,23 +37,32 @@ class Populator:
         return self._methods
 
     def build_packets(
-        self, dbf: DatabaseFactory, table_spec: TableSpec
+        self,
+        dbf: DatabaseFactory,
+        table_spec: TableSpec,
+        progress: dict[str, str | int],
     ) -> tuple[TableSpec, TablePacket]:
         if dbf.id is None:
             raise ValueError("Database not initialized with a valid ID.")
 
         table_spec.db_id = dbf.id
+        progress["status"] = "validating"
         _errors, ordered_columns = self._validate_and_sort_specs(table_spec.columns)
+        
+        progress["status"] = "building"
         errors, column_entries = self.build_table_entries(
-            dbf, ordered_columns, table_spec
+            dbf, ordered_columns, table_spec, progress
         )
 
+        progress["status"] = "arranging"
         columns = list(column_entries.keys())
         rows = list(map(list, zip(*column_entries.values())))
 
+        progress["status"] = "paginating"
         table_packet = self.paginate_table_packet(
             table_spec, columns, rows, errors + _errors
         )
+        progress["status"] = "completed"
         return (table_spec, table_packet)
 
     def paginate_table_packet(
@@ -119,6 +133,7 @@ class Populator:
         dbf: DatabaseFactory,
         ordered_columns: list[ColumnSpec],
         table_spec: TableSpec,
+        progress: dict[str, str | int],
     ) -> tuple[list[ErrorPacket], dict[str, list[str | None]]]:
 
         metadata = dbf.get_table_metadata(table_spec.name)
@@ -145,6 +160,8 @@ class Populator:
         for entry_index in range(table_spec.no_of_entries):
             i = 0
             context.filled = []
+            progress["row"] = entry_index
+            progress["column"] = context.col_spec.name
             while i < len(gen_fns):
                 try:
                     context.col_spec = ordered_columns[i]

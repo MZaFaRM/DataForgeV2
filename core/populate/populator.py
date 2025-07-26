@@ -53,7 +53,8 @@ class Populator:
         errors, column_entries = self.build_table_entries(
             dbf, ordered_columns, table_spec, progress
         )
-
+        
+        progress["column"] = "" 
         columns = list(column_entries.keys())
         rows = list(map(list, zip(*column_entries.values())))
 
@@ -150,13 +151,13 @@ class Populator:
             i = 0
             context.filled = []
             progress["row"] = entry_index
-            progress["column"] = context.col_spec.name
             while i < len(gen_fns):
                 try:
                     context.col_spec = ordered_columns[i]
 
                     gen = gen_fns[i]
                     col_spec = context.col_spec
+                    progress["column"] = col_spec.name
 
                     for _ in range(10):
                         value = next(gen)

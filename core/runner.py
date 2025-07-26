@@ -1,8 +1,5 @@
 import json
 from multiprocessing import Manager, Process, Queue
-from multiprocessing.managers import DictProxy
-import os
-from pathlib import Path
 from random import SystemRandom
 import sys
 import threading
@@ -11,36 +8,19 @@ from typing import Any
 import uuid
 
 from core.helpers import requires
-from core.settings import LOG_PATH
-from core.utils.types import TablePacket, TableSpec
+from core.utils.types import TableSpec
 
 from core.populate.populator import Populator
 from core.populate.factory import DatabaseFactory
 from core.utils.response import Request, Response
 
 
-import logging
 
 
 class Runner:
     def __init__(self):
         self.dbf = DatabaseFactory()
         self.populator = Populator()
-        self._setup_logger()
-
-    def _setup_logger(self):
-        self.logger = logging.getLogger("RunnerLogger")
-        self.logger.setLevel(logging.INFO)
-        log_path = Path(os.path.join(LOG_PATH, "runner.log"))
-        log_path.parent.mkdir(parents=True, exist_ok=True)
-
-        os.makedirs(os.path.dirname(log_path), exist_ok=True)
-        handler = logging.FileHandler(log_path, mode="a")
-        formatter = logging.Formatter(
-            "%(asctime)s | %(levelname)s | %(message)s", "%Y-%m-%d %H:%M:%S"
-        )
-        handler.setFormatter(formatter)
-        self.logger.addHandler(handler)
 
     def listen(self):
         for line in sys.stdin:
@@ -53,20 +33,19 @@ class Runner:
                 break
 
             try:
-                self.logger.info(f"Received: {line}")
                 req = json.loads(line)
-                _id = req.pop("id", None)
                 req = Request(**req)
+                _id = req.id
                 res_obj = self.handle_command(req)
+                
                 res_obj["id"] = _id
                 res = json.dumps(res_obj)
-                self.logger.info(f"Response: {res}")
             except Exception as e:
                 tb = traceback.format_exc()
                 res_obj = Response(status="error", error=str(e), traceback=tb).to_dict()
+                
                 res_obj["id"] = _id
                 res = json.dumps(res_obj)
-                self.logger.error(f"Error: {str(e)}\nTraceback: {tb}")
             finally:
                 print(res, flush=True)
 

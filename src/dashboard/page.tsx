@@ -14,7 +14,6 @@ export default function DashboardPage() {
   const [dbCreds, setDbCreds] = useState<DBCreds | null>(null)
   const [activeTable, setActiveTable] = useState<string | null>(null)
   const [usageInfo, setUsageInfo] = useState<UsageInfo[]>([])
-  const { setTheme, theme } = useTheme()
 
   async function fetchUsageInfo() {
     try {

@@ -15,6 +15,7 @@ class Response(BaseModel):
 
 
 class Request(BaseModel):
+    id: str | None = None
     kind: str
     body: dict[str, Any] | None = None
 

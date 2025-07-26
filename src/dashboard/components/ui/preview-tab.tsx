@@ -68,6 +68,7 @@ export default function RenderPreview({
 
   useEffect(() => {
     setTablePacket(null)
+    handleKillGenPackets()
   }, [tableSpec?.name])
 
   useEffect(() => {
@@ -115,7 +116,7 @@ export default function RenderPreview({
         })
       }
     }
-  }, [tablePacket])
+  }, [tablePacket?.errors])
 
   useEffect(() => {
     if (!pendingJobId) return
@@ -263,9 +264,7 @@ export default function RenderPreview({
   }
 
   return (
-    <div
-      className={cn("flex h-full flex-col", loading && "cursor-wait")}
-    >
+    <div className={cn("flex h-full flex-col", loading && "cursor-wait")}>
       <div
         className={cn(
           "bg-current-foreground flex h-full flex-col items-center justify-center rounded-md bg-gradient-to-br text-gray-800",

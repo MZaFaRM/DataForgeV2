@@ -79,6 +79,9 @@ export default function InsertionPanel({
     setTableData(null)
     setTableSpec(null)
     setGlobalSpecs({})
+    if (activeTable) {
+      fetchActiveTableData()
+    }
   }, [dbCreds])
 
   useEffect(() => {
@@ -98,14 +101,6 @@ export default function InsertionPanel({
       behavior: "auto",
     })
   }, [activeTable, dbCreds])
-
-  // useEffect(() => {
-  //   previewTabRef.current?.scrollTo({
-  //     top: 0,
-  //     left: 0,
-  //     behavior: "smooth",
-  //   })
-  // }, [tablePacket])
 
   async function handleTabChange(activeTab: string) {
     setActiveTab(activeTab)

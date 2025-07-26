@@ -121,7 +121,6 @@ export default function ConnectionSelector({
       .then((creds) => {
         if (creds.length > 0) {
           setDbList(creds)
-          // console.log("Fetched database credentials:", creds)
         } else {
           setDbList([])
         }
@@ -132,15 +131,24 @@ export default function ConnectionSelector({
       })
   }
 
-  function handleDbDisconnect() {
-    invokeDbDisconnect()
-      .then(() => {
-        updateDb(null)
-        // console.log("Disconnected from the database.")
-      })
-      .catch((error) => {
-        console.error("Error disconnecting from the database:", error)
-      })
+  async function handleRefresh() {
+    setDbConnecting(true)
+    try {
+      await handleDbCredsSelect(dbCreds!)
+    } catch (error) {
+      console.error("Error refreshing database info:", error)
+    } finally {
+      setDbConnecting(false)
+    }
+  }
+
+  async function handleDbDisconnect() {
+    try {
+      await invokeDbDisconnect()
+      updateDb(null)
+    } catch (error) {
+      console.error("Error disconnecting from the database:", error)
+    }
   }
 
   async function handleDbCredsSelect(creds: DBCreds) {
@@ -277,10 +285,7 @@ export default function ConnectionSelector({
               <CommandEmpty>No DB found.</CommandEmpty>
               <CommandSeparator />
               <CommandGroup heading="Actions">
-                <CommandItem
-                  onSelect={handleSavedDbCreds}
-                  disabled={dbConnecting}
-                >
+                <CommandItem onSelect={handleRefresh} disabled={dbConnecting}>
                   <Icon
                     icon="mdi:refresh"
                     className={cn(
@@ -288,7 +293,7 @@ export default function ConnectionSelector({
                       dbConnecting && "animate-spin"
                     )}
                   />
-                  
+                  Refresh
                 </CommandItem>
                 {dbCreds?.name && (
                   <>

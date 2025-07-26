@@ -253,13 +253,15 @@ export default function InsertionPanel({
           {!activeTable ? (
             <>
               <div className="mb-4 flex items-center space-x-2">
-                {Array.from({ length: 4 }).map((_, i) => (
-                  <Icon
-                    key={i}
-                    icon="meteocons:dust-wind"
-                    className="h-8 w-8 text-muted-foreground"
-                  />
-                ))}
+                <div className="flex gap-2">
+                  {[0, 300, 600, 900].map((delay, i) => (
+                    <Icon
+                      key={i}
+                      icon="streamline-pixel:interface-essential-waiting-hourglass-loading"
+                      className={`animate-fade-loop h-6 w-6 text-muted-foreground animation-delay-${delay}`}
+                    />
+                  ))}
+                </div>
               </div>
               <p className="mb-4 text-sm font-medium text-muted-foreground">
                 Select a table to continue.
@@ -403,7 +405,7 @@ export default function InsertionPanel({
               </div>
             </div>
           ) : !dbCreds || (dbCreds && !loading) ? (
-            <div className="flex h-full w-full items-center justify-center">
+            <div className="flex h-full w-full items-center justify-center bg-muted">
               <Icon
                 icon={`meteocons:${timeOfDay}-fill`}
                 className="margin-auto h-16 w-16"

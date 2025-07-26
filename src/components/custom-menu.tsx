@@ -25,7 +25,7 @@ export function Menu() {
     <div className="flex items-center border-none bg-muted py-1 lg:pl-3">
       <div className="flex w-full items-center px-2 py-1">
         <div className="mr-4 inline-flex items-center text-cyan-500">
-          <Sailboat className="h-5 w-5" />
+          <Icon icon="simple-icons:curseforge" className="h-5 w-5" />
           <span className="ml-2 font-semibold text-foreground">DataForge</span>
         </div>
 
@@ -70,6 +70,15 @@ export function Menu() {
           >
             <Icon icon="cib:github" className="h-5 w-5" />
             Github
+          </button>
+          <button
+            className={cn(
+              "flex items-center gap-2 rounded bg-transparent px-2 py-2 text-sm font-medium",
+              "mr-4 text-muted-foreground hover:bg-accent hover:text-accent-foreground"
+            )}
+            onClick={() => openUrl("https://buymeacoffee.com/mzafarm")}
+          >
+            <Icon icon="simple-icons:buymeacoffee" className="h-5 w-5" />
           </button>
         </div>
       </div>

@@ -389,6 +389,39 @@ export default function ConnectionSelector({
           </DialogHeader>
           <div>
             <div className="space-y-4 py-2 pb-4">
+              <div>
+                <Popover>
+                  <PopoverTrigger asChild>
+                    <Button
+                      variant="outline"
+                      className="w-full cursor-not-allowed justify-start opacity-70"
+                      disabled
+                    >
+                      <Icon
+                        icon="logos:mysql-icon"
+                        className="mr-2 h-5 w-5 text-muted-foreground"
+                      />
+                      MySQL (That's all for now)
+                      <CaretSortIcon className="ml-auto h-4 w-4" />
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent>
+                    <Command>
+                      <CommandList>
+                        <CommandItem key="mysql" value="mysql" disabled>
+                          <div className="flex items-center">
+                            <Icon
+                              icon="logos:mysql-icon"
+                              className="mr-2 h-5 w-5"
+                            />
+                            MySQL
+                          </div>
+                        </CommandItem>
+                      </CommandList>
+                    </Command>
+                  </PopoverContent>
+                </Popover>
+              </div>
               <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
                 <div
                   className={

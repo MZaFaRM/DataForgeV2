@@ -1,4 +1,5 @@
 import ast
+import json
 import logging
 import os
 import platform
@@ -11,6 +12,8 @@ from multiprocessing import Process, Queue
 from numbers import Number
 from pathlib import Path
 from queue import Empty
+import subprocess
+import sys
 import types
 from typing import Any, Callable, Generator
 from urllib.parse import quote_plus
@@ -28,11 +31,13 @@ from sqlalchemy.engine.reflection import Inspector
 from core.helpers import cap_numeric, cap_string
 from core.populate.config import DBFRegistry
 from core.settings import LOG_PATH
-from core.utils.exceptions import (ManualException,
-                                   MissingRequiredAttributeError,
-                                   ValidationWarning, VerificationError)
-from core.utils.types import (ColumnMetadata, ColumnSpec, DbCredsSchema,
-                              ForeignKeyRef)
+from core.utils.exceptions import (
+    ManualException,
+    MissingRequiredAttributeError,
+    ValidationWarning,
+    VerificationError,
+)
+from core.utils.types import ColumnMetadata, ColumnSpec, DbCredsSchema, ForeignKeyRef
 from core.utils.types import GeneratorType as GType
 from core.utils.types import TableMetadata, TablePacket, UsageStatSchema
 
@@ -87,7 +92,7 @@ class DatabaseFactory:
             if not hasattr(schema, key):
                 raise ValueError(f"Missing required key: {key}")
             setattr(self, key, getattr(schema, key, None))
-            
+
         if hasattr(schema, "id"):
             self.id = schema.id
 
@@ -101,19 +106,19 @@ class DatabaseFactory:
                     "Required arguments for url: user, password, host, port and name not set."
                 )
         return self._url
-    
+
     @property
     def id(self) -> int:
         if not hasattr(self, "_id") or self._id is None:
             raise AttributeError("Not connected to a database")
         return self._id
-    
+
     @id.setter
     def id(self, value: int | None):
         if isinstance(value, int):
             self._id = value
         elif value == None and hasattr(self, "_id"):
-                del self._id
+            del self._id
 
     @property
     def engine(self) -> Engine:
@@ -440,50 +445,31 @@ class DatabaseFactory:
             "Copyright (c) 2025, DataForge Initiative.",
             " All bugs reserved.",
             "",
-            "Type 'help;' or '\\h' for help. Type '\\c' to clear the current input statement.",
+            "Type 'help;' or '\\h' for help. Type 'clear;' to clear the screen.",
         ]
         return {"log": banner, "prompt": self.DB_ENGINE}
 
     def run_sql(self, sql: str) -> list:
-        def execute(engine_url: str, sql: str, queue: Queue):
-            from sqlalchemy import create_engine, text
-            from tabulate import tabulate
-
-            try:
-                engine = create_engine(engine_url)
-                with engine.begin() as conn:
-                    result = conn.execute(text(sql))
-                    output = []
-
-                    if result.returns_rows:
-                        rows = result.fetchall()
-                        headers = list(result.keys())
-                        output.extend(
-                            tabulate(
-                                rows, headers=headers, tablefmt="grid"
-                            ).splitlines()
-                        )
-                        output.append(f"{len(rows)} row(s) in set")
-                    else:
-                        output.append(f"Query OK, {result.rowcount} row(s) affected")
-                    queue.put(output)
-            except Exception as e:
-                queue.put([f"ERROR 8008 (4200): {str(e)}"])
-
-        queue = Queue()
-        p = Process(target=execute, args=(self.url, sql, queue))
-        p.start()
-        timeout = 5.0
-        p.join(timeout=timeout)
-
-        if p.is_alive():
-            p.terminate()
-            return [f"ERROR 408 (HYT00): Query timed out after {timeout:.2f} sec"]
-
         try:
-            return queue.get(timeout=1)
-        except Empty:
-            return ["ERROR 408 (HYT00): No output returned"]
+            timeout = 10
+            payload = json.dumps([self.url, sql, 10]).encode()
+            if getattr(sys, "frozen", False):
+                exe = os.path.join(
+                    getattr(sys, "_MEIPASS"), "subprocess", "safe_sql_eval.exe"
+                )
+                cmd = [exe]
+            else:
+                cmd = [sys.executable, "-m", "core.subprocess.safe_sql_eval"]
+
+            proc = subprocess.run(
+                cmd, input=payload, capture_output=True, timeout=timeout
+            )
+            return json.loads(proc.stdout)
+
+        except subprocess.TimeoutExpired:
+            return [f"ERROR 408 (HYT00): Query timed out after {timeout} sec"]
+        except Exception as e:
+            return [f"ERROR 8008 (4200): {str(e)}"]
 
     def insert_packet(self, packet: TablePacket):
         table_name = packet.name
@@ -513,11 +499,11 @@ class DatabaseFactory:
         table_name = packet.name
         if not packet.columns or not packet.entries:
             raise ValueError("Missing columns and/or entries.")
-        
+
         def sql_literal(val: str | None) -> str:
             if val is None or val.upper() == "NULL":
                 return "NULL"
-            return f"'{val.replace('\'', '\\\'')}'"
+            return "'" + val.replace("'", "\\'") + "'"
 
         sql = (
             f"INSERT INTO `{table_name}` (\n"
@@ -570,15 +556,17 @@ class GeneratorFactory:
     def __init__(self, seed: int | None) -> None:
         self.faker = Faker()
         self.seed = seed
-        
+
         if seed is not None:
             self.faker.seed_instance(seed)
 
-    def make(self, type: GType) -> Callable[[ContextFactory], Generator[str | None, None, None]]:
+    def make(
+        self, type: GType
+    ) -> Callable[[ContextFactory], Generator[str | None, None, None]]:
         make_fn = getattr(self, f"make_{type.value}", None)
         if make_fn is None or not callable(make_fn):
             raise ValueError(f"Unknown generator type: {type}")
-        return make_fn # type: ignore
+        return make_fn  # type: ignore
 
     def make_faker(self, context: ContextFactory) -> Generator[str | None, None, None]:
         faker_fn = getattr(self.faker, context.col_spec.generator or "")
@@ -594,7 +582,7 @@ class GeneratorFactory:
     def make_python(self, context: ContextFactory) -> Generator[str | None, None, None]:
         try:
             tree = ast.parse(context.col_spec.generator or "")
-                        
+
             # Prepare the environment for execution
             env = {
                 "faker": faker,
@@ -608,7 +596,10 @@ class GeneratorFactory:
             # Call the generator function
             gen = env["generator"]
             while True:
-                columns = {key: context.entries[key][context.row_idx] for key in context.entries}
+                columns = {
+                    key: context.entries[key][context.row_idx]
+                    for key in context.entries
+                }
                 yield str(gen(columns=columns))
 
         except SyntaxError as e:
@@ -625,7 +616,9 @@ class GeneratorFactory:
                 val = cap_numeric(val, col.precision, col.scale)  # type: ignore
             yield str(val)
 
-    def make_foreign(self, context: ContextFactory) -> Generator[str | None, None, None]:
+    def make_foreign(
+        self, context: ContextFactory
+    ) -> Generator[str | None, None, None]:
         column = context.column
         fk = column.foreign_keys
         cache = context.cache
@@ -646,22 +639,25 @@ class GeneratorFactory:
                 raise ValidationWarning(msg)
             else:
                 raise ValueError(msg)
-            
+
         while True:
             yield random.choice(rows)
 
-    def make_autoincrement(self, context: ContextFactory) -> Generator[str | None, None, None]:
+    def make_autoincrement(
+        self, context: ContextFactory
+    ) -> Generator[str | None, None, None]:
         while True:
             yield None
 
-    def make_computed(self, context: ContextFactory) -> Generator[str | None, None, None]:
+    def make_computed(
+        self, context: ContextFactory
+    ) -> Generator[str | None, None, None]:
         while True:
             yield None
 
     def make_null(self, context: ContextFactory) -> Generator[str | None, None, None]:
         while True:
             yield None
-    
 
     def check(self, type: GType, generator: str) -> bool | int:
         make_fn = getattr(self, f"check_{type.value}", None)

@@ -21,6 +21,14 @@ TEST_CREDS = {
 def runner():
     return Runner()
 
+def test_run_sql_query_h(runner: Runner):
+    res = runner.handle_command(Request(kind="set_db_reconnect", body=TEST_CREDS))
+    assert res["status"] == "ok", res["error"]
+    res = runner.handle_command(
+        Request(kind="run_sql_query", body={"sql": "SELECT * FROM students"})
+    )
+    assert res["status"] == "ok"
+
 
 def test_handle_ping(runner: Runner):
     req = Request(kind="ping", body={})

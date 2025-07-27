@@ -14,13 +14,13 @@ export default function SqlInsertionTab({
   const [sqlLog, setSqlLog] = useState<SqlLog>({ log: [], prompt: "" })
   const [queryHistory, setQueryHistory] = useState<string[]>([])
   const [currentHistoryIndex, setCurrentHistoryIndex] = useState(0)
+  const [loading, setLoading] = useState(false)
   const [query, setQuery] = useState<string>("")
   const ref = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
     invokeGetSqlBanner().then((log) => {
       setSqlLog(log)
-      // console.log("SQL Log:", log)
     })
   }, [])
 
@@ -33,6 +33,7 @@ export default function SqlInsertionTab({
   }
 
   async function newLine(rawQuery: string) {
+    // if (loading) return
     setQuery(rawQuery)
     if (
       rawQuery.endsWith(";\n") ||
@@ -59,12 +60,13 @@ export default function SqlInsertionTab({
       let output: string[] = []
 
       if (rawQuery.trim() !== "") {
+        console.log("quer:", rawQuery.trim())
         output = await runSql(rawQuery.trim())
       }
 
       setSqlLog((prev) => ({
         ...prev,
-        log: [...prev.log, ...formattedLines, ...output],
+        log: [...prev.log, ...formattedLines, ...output].slice(-200),
       }))
       setQuery("")
     }
@@ -101,6 +103,7 @@ export default function SqlInsertionTab({
 
   async function runSql(query: string): Promise<string[]> {
     try {
+      setLoading(true)
       const resLog = await invokeRunSql(query)
       onSuccess()
       console.log("SQL Execution Result:", resLog)
@@ -113,6 +116,8 @@ export default function SqlInsertionTab({
         description: error.message,
       })
       return []
+    } finally {
+      setLoading(false)
     }
   }
 

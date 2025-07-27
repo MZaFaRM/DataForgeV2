@@ -7,7 +7,6 @@ import { openUrl } from "@tauri-apps/plugin-opener"
 
 import { TooltipProvider } from "@/components/ui/tooltip"
 import { DBCreds, UsageInfo } from "@/components/types"
-import { appWindow } from "@tauri-apps/plugin-window"
 
 export default function DashboardPage() {
   const [dbCreds, setDbCreds] = useState<DBCreds | null>(null)

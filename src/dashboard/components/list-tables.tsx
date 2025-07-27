@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react"
-import { invokeGetRowsConfig, invokeGetTables } from "@/api/db"
+import { invokeGetTables } from "@/api/db"
 import { Icon } from "@iconify/react"
 
 import { Input } from "@/components/ui/input"

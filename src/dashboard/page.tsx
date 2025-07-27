@@ -1,11 +1,9 @@
-import { useEffect, useState } from "react"
+import { useState } from "react"
 import { invokeGetRowsConfig } from "@/api/db"
 import ConnectionStatus from "@/dashboard/components/connection-status"
 import InsertionPanel from "@/dashboard/components/insertion-panel"
 import ListTables from "@/dashboard/components/list-tables"
-import { LaptopIcon, MoonIcon, SunIcon } from "@radix-ui/react-icons"
 import { openUrl } from "@tauri-apps/plugin-opener"
-import { useTheme } from "next-themes"
 
 import { TooltipProvider } from "@/components/ui/tooltip"
 import { DBCreds, UsageInfo } from "@/components/types"

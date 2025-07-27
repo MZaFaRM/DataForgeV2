@@ -55,7 +55,6 @@ export default function InsertTab({
   setTableSpec,
 }: InsertTabProps) {
   const [hoveredGroup, setHoveredGroup] = useState<string[] | null>(null)
-  // console.log("TableSpec:", tableSpec)
 
   return (
     <div className="flex h-full w-full flex-col overflow-auto">
@@ -305,9 +304,7 @@ function RenderGenerator({
   ].join("\n")
 
   useEffect(() => {
-    setSelected(null)
-    setGeneratorInput(null)
-    
+    setGeneratorInput(selected || null)
     if (generatorType === "foreign") {
       setSelected(`${column.foreignKeys?.table}__${column.foreignKeys?.column}`)
     } else if (generatorType === "autoincrement") {

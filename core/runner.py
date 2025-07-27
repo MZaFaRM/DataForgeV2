@@ -239,12 +239,11 @@ class Runner:
         )
 
     @requires()
-    def _handle_kill_gen_packets(self, _=None) -> dict:
+    def _handle_clear_gen_packets(self, _=None) -> dict:
         if hasattr(self, "_active_process") and self._active_process.is_alive():
             self._active_process.terminate()
             self._active_process.join()
-            return self._ok("Generation process killed.")
-        return self._err("No active generation process to kill.")
+        return self._ok("Generation process cleared.")
 
     @requires("job_id")
     def _handle_poll_gen_status(self, body: dict) -> dict:

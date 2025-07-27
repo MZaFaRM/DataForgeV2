@@ -640,29 +640,25 @@ class GeneratorFactory:
         return True
 
     def check_python(self, generator: str) -> int:
-        try:
-            tree = ast.parse(generator)
-
-            for node in tree.body:
-                if isinstance(node, ast.FunctionDef) and node.name == "generator":
-                    if len(node.args.args) != 1 or (node.args.args[0].arg != "columns"):
-                        raise ValueError(
-                            "generator() must take exactly 1 arg: 'columns'."
-                        )
-                    for deco in node.decorator_list:
-                        if (
-                            isinstance(deco, ast.Call)
-                            and getattr(deco.func, "id", "") == "order"
+        tree = ast.parse(generator)
+        for node in tree.body:
+            if isinstance(node, ast.FunctionDef) and node.name == "generator":
+                if len(node.args.args) != 1 or (node.args.args[0].arg != "columns"):
+                    raise ValueError(
+                        "generator() must take exactly 1 arg: 'columns'."
+                    )
+                for deco in node.decorator_list:
+                    if (
+                        isinstance(deco, ast.Call)
+                        and getattr(deco.func, "id", "") == "order"
+                    ):
+                        if isinstance(deco.args[0], ast.Constant) and isinstance(
+                            deco.args[0].value, int
                         ):
-                            if isinstance(deco.args[0], ast.Constant) and isinstance(
-                                deco.args[0].value, int
-                            ):
-                                return deco.args[0].value
-                            raise ValueError("@order requires int type arg")
-                    raise ValueError("Missing @order(int) decorator")
-            raise ValueError("No valid generator() function found")
-        except SyntaxError as e:
-            raise ValueError(f"Syntax Error: {e}")
+                            return deco.args[0].value
+                        raise ValueError("@order requires int type arg")
+                raise ValueError("Missing @order(int) decorator")
+        raise ValueError("No valid generator() function found")
 
     def check_regex(self, generator: str):
         # This will raise an error if the regex is invalid

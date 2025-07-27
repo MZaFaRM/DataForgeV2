@@ -269,7 +269,11 @@ class Runner:
                 return self._ok(response)
             return self._err("No result. Process may not have started or crashed.")
 
-        paginated = self.populator.paginate_table_packet(self._result_queue.get())
+        if res := self._result_queue.get():
+            if isinstance(res, Exception):
+                return self._err(f"Error during generation: {str(res)}")
+
+        paginated = self.populator.paginate_table_packet(res)
         response.update(
             {
                 "status": "done",

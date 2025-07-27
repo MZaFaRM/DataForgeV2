@@ -305,6 +305,9 @@ function RenderGenerator({
   ].join("\n")
 
   useEffect(() => {
+    setSelected(null)
+    setGeneratorInput(null)
+    
     if (generatorType === "foreign") {
       setSelected(`${column.foreignKeys?.table}__${column.foreignKeys?.column}`)
     } else if (generatorType === "autoincrement") {

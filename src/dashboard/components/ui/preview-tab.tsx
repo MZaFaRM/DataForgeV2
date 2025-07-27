@@ -432,6 +432,7 @@ export default function RenderPreview({
                   value = 99_999
                 }
                 setNoOfRowsInput(value)
+                setNeedsRefresh(true)
               }}
             />
             <span> Rows</span>

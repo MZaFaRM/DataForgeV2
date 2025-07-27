@@ -3,11 +3,13 @@ from multiprocessing import Manager, Process, Queue
 from random import SystemRandom
 import sys
 import threading
+import time
 import traceback
 from typing import Any
 import uuid
 
 from core.helpers import requires
+from core.populate.subprocess import run_sql_worker
 from core.utils.types import TableSpec
 
 from core.populate.populator import Populator
@@ -90,8 +92,9 @@ class Runner:
                 return self._ok(last_connected.model_dump())
             except Exception as e:
                 self.dbf.disconnect()
-                return self._err(f"Failed to connect to last connected database: {str(e)}")
-            
+                return self._err(
+                    f"Failed to connect to last connected database: {str(e)}"
+                )
 
     @requires("host", "user", "port", "name", "password")
     def _handle_set_db_connect(self, creds: dict) -> dict:
@@ -302,9 +305,27 @@ class Runner:
     @requires("sql")
     def _handle_run_sql_query(self, body: dict) -> dict:
         try:
-            return self._ok(self.dbf.run_sql(body["sql"]))
+            result_queue = Queue()
+            p = Process(
+                target=run_sql_worker, args=(self.dbf.url, body["sql"], result_queue)
+            )
+            p.start()
+
+            timeout = 10
+            start = time.time()
+            while time.time() - start < timeout:
+                if not p.is_alive():
+                    if not result_queue.empty():
+                        return self._ok(result_queue.get())
+                    return self._ok([""])
+                time.sleep(0.1)
+
+            p.terminate()
+            return self._ok(
+                [f"ERROR 408 (HYT00): Query timed out after {timeout:.2f} sec"]
+            )
         except Exception as e:
-            return self._err(f"SQL execution failed: {str(e)}")
+            return self._err([f"ERROR 8008 (4200): {str(e)}"])
 
     @requires()
     def _handle_get_logs_read(self, body: dict) -> dict:

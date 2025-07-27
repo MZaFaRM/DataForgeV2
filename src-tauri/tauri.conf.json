@@ -12,11 +12,12 @@
   "app": {
     "windows": [
       {
+        "decorations": true,
         "title": "DataForge",
         "width": 1350,
         "height": 825,
         "resizable": true,
-        "fullscreen": true
+        "fullscreen": false
       }
     ],
     "security": {

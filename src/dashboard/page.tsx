@@ -1,4 +1,4 @@
-import { useState } from "react"
+import { useEffect, useState } from "react"
 import { invokeGetRowsConfig } from "@/api/db"
 import ConnectionStatus from "@/dashboard/components/connection-status"
 import InsertionPanel from "@/dashboard/components/insertion-panel"
@@ -7,11 +7,12 @@ import { openUrl } from "@tauri-apps/plugin-opener"
 
 import { TooltipProvider } from "@/components/ui/tooltip"
 import { DBCreds, UsageInfo } from "@/components/types"
+import { appWindow } from "@tauri-apps/plugin-window"
 
 export default function DashboardPage() {
   const [dbCreds, setDbCreds] = useState<DBCreds | null>(null)
   const [activeTable, setActiveTable] = useState<string | null>(null)
-  const [usageInfo, setUsageInfo] = useState<UsageInfo[]>([])
+  const [usageInfo, setUsageInfo] = useState<UsageInfo[]>([])  
 
   async function fetchUsageInfo() {
     try {

@@ -9,13 +9,14 @@ from dataclasses import dataclass
 from datetime import datetime
 from numbers import Number
 from pathlib import Path
+import traceback
 from typing import Any, Callable, Generator
 from urllib.parse import quote_plus
 
-import faker
 import networkx as nx
 import rstr
 from faker import Faker
+import faker
 from networkx import Graph
 from sqlalchemy import Connection, create_engine, inspect
 from sqlalchemy import text as sql_text
@@ -488,13 +489,6 @@ class DatabaseFactory:
             + ";"
         )
 
-        try:
-            with self.engine.begin() as conn:
-                conn.execute(sql_text(sql))
-                raise ManualException("Force rollback for preview")
-        except ManualException:
-            pass
-
         with open(path, "w") as f:
             f.write(
                 f"\n-- Exported at {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n"
@@ -571,6 +565,8 @@ class GeneratorFactory:
 
         except SyntaxError as e:
             raise VerificationError(f"Syntax Error in Python script: {e}")
+        except Exception as e:
+            raise Exception(str(e), str(traceback.format_exc()))
 
     def make_regex(self, context: ContextFactory) -> Generator[str | None, None, None]:
         col = context.column
@@ -644,9 +640,7 @@ class GeneratorFactory:
         for node in tree.body:
             if isinstance(node, ast.FunctionDef) and node.name == "generator":
                 if len(node.args.args) != 1 or (node.args.args[0].arg != "columns"):
-                    raise ValueError(
-                        "generator() must take exactly 1 arg: 'columns'."
-                    )
+                    raise ValueError("generator() must take exactly 1 arg: 'columns'.")
                 for deco in node.decorator_list:
                     if (
                         isinstance(deco, ast.Call)

@@ -90,25 +90,3 @@ def requires(*required_keys: str | type[BaseModel], connected: bool = False):
         return wrapper
 
     return decorator
-
-
-def safe_eval(code: str, context: dict, result_queue: multiprocessing.Queue):
-    try:
-        tree = ast.parse(code)
-        env = {
-            "faker": faker,
-            "columns": {},
-            "order": lambda x: (lambda f: f),
-            "__builtins__": __builtins__,
-        }
-        exec(compile(tree, filename="<ast>", mode="exec"), env)
-        gen = env["generator"]
-
-        rows = []
-        for idx in range(context["n"]):
-            columns = {key: context["entries"][key][idx] for key in context["entries"]}
-            val = gen(columns=columns)
-            rows.append(str(val))
-        result_queue.put(rows)
-    except Exception as e:
-        result_queue.put(e)

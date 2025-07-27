@@ -252,7 +252,7 @@ class Populator:
                     ErrorPacket(
                         column=c_spec.name,
                         type="error",
-                        msg=f"Error in column '{c_spec.name}': {str(e)}",
+                        msg=f"Error '{c_spec.name}' {str(e)}",
                     )
                 )
 

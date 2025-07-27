@@ -9,7 +9,7 @@ from typing import Any
 import uuid
 
 from core.helpers import requires
-from core.populate.subprocess import run_sql_worker
+from core.populate.subprocess import generate_packets, run_sql_worker
 from core.utils.types import TableSpec
 
 from core.populate.populator import Populator
@@ -202,17 +202,6 @@ class Runner:
         self._generation_id = str(uuid.uuid4())
         self._result_queue = Queue()
 
-        def target(q, dbf: DatabaseFactory, spec_dict: dict, seed: int, progress: dict):
-            try:
-                pop = Populator(seed=seed)
-                specs, packet = pop.build_packets(
-                    dbf, TableSpec(**spec_dict), progress=progress
-                )
-                dbf.registry.save_specs(specs)
-                q.put(packet)
-            except Exception as e:
-                q.put(Response(status="error", error=str(e)).to_dict())
-
         self._progress = Manager().dict()
         self._progress.update(
             {
@@ -223,12 +212,11 @@ class Runner:
             }
         )
         self._active_process = Process(
-            target=target,
+            target=generate_packets,
             args=(
                 self._result_queue,
-                self.dbf,
+                self.dbf.to_schema(),
                 body,
-                SystemRandom().randint(1, 999999999),
                 self._progress,
             ),
         )

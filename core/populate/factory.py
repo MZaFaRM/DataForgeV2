@@ -7,11 +7,8 @@ import re
 from collections.abc import Sequence
 from dataclasses import dataclass
 from datetime import datetime
-from multiprocessing import Process, Queue
 from numbers import Number
 from pathlib import Path
-from queue import Empty
-import types
 from typing import Any, Callable, Generator
 from urllib.parse import quote_plus
 
@@ -24,7 +21,6 @@ from sqlalchemy import Connection, create_engine, inspect
 from sqlalchemy import text as sql_text
 from sqlalchemy.engine import Engine, Inspector
 from sqlalchemy.engine.reflection import Inspector
-from tabulate import tabulate
 
 from core.helpers import cap_numeric, cap_string
 from core.populate.config import DBFRegistry
@@ -529,12 +525,8 @@ class ContextFactory:
 
 
 class GeneratorFactory:
-    def __init__(self, seed: int | None) -> None:
+    def __init__(self) -> None:
         self.faker = Faker()
-        self.seed = seed
-
-        if seed is not None:
-            self.faker.seed_instance(seed)
 
     def make(
         self, type: GType
@@ -562,7 +554,6 @@ class GeneratorFactory:
             # Prepare the environment for execution
             env = {
                 "faker": faker,
-                "SEED": self.seed,
                 "columns": {},
                 "order": lambda x: (lambda f: f),
                 "__builtins__": __builtins__,

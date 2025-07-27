@@ -295,11 +295,8 @@ function RenderGenerator({
   const [open, setOpen] = useState(false)
   const { theme } = useTheme()
   const pythonPlaceholder = [
-    "# You can use builtins + faker",
+    "# You can import builtins + faker",
     "# Python generators run *after* faker, foreign, regex, etc.",
-    "# For reproducible randomness, use the SEED variable like:",
-    "#   import random; random.seed(SEED)",
-    "#   faker.seed_instance(SEED)",
     "# Use @order(int) to set execution order between python generators",
     "# Example:",
     "#   @order(1)",

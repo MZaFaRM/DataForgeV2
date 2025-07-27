@@ -15,14 +15,10 @@ from .factory import ContextFactory, DatabaseFactory, GeneratorFactory
 
 
 class Populator:
-    def __init__(self, seed: int | None = None):
+    def __init__(self):
         self.faker = Faker()
-        self.seed = seed
-        if seed is not None:
-            self.faker.seed_instance(seed)
-
         self.cache = {}
-        self.tf = GeneratorFactory(self.seed)
+        self.tf = GeneratorFactory()
 
     @property
     def methods(self) -> list[str]:

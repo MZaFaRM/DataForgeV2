@@ -96,7 +96,7 @@ class Runner:
                     f"Failed to connect to last connected database: {str(e)}"
                 )
 
-    @requires("host", "user", "port", "name", "password")
+    @requires("host", "user", "port", "name", "password", "dialect")
     def _handle_set_db_connect(self, creds: dict) -> dict:
         self.dbf.disconnect()
         if saved := self.dbf.registry.exists(
@@ -104,6 +104,7 @@ class Runner:
             user=creds["user"],
             host=creds["host"],
             port=creds["port"],
+            dialect=creds["dialect"],
         ):
             self.dbf.from_schema(saved)
         else:
@@ -119,7 +120,7 @@ class Runner:
 
         return self._ok(self.dbf.to_dict())
 
-    @requires("name", "host", "port", "user")
+    @requires("name", "host", "port", "user", "dialect")
     def _handle_set_db_reconnect(self, creds: dict):
         self.dbf.disconnect()
         if schema := self.dbf.registry.exists(
@@ -127,6 +128,7 @@ class Runner:
             user=creds["user"],
             host=creds["host"],
             port=creds["port"],
+            dialect=creds["dialect"],
         ):
             self.dbf.from_schema(schema)
             try:
@@ -316,7 +318,7 @@ class Runner:
                 [f"ERROR 408 (HYT00): Query timed out after {timeout:.2f} sec"]
             )
         except Exception as e:
-            return self._err([f"ERROR 8008 (4200): {str(e)}"])
+            return self._ok([f"ERROR 8008 (4200): {str(e)}"])
 
     @requires()
     def _handle_get_logs_read(self, body: dict) -> dict:

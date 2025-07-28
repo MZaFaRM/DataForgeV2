@@ -1,11 +1,11 @@
 import { useEffect, useState } from "react"
 import {
+  invokeClearGenPackets,
   invokeExportSqlPacket,
   invokeGenPackets,
   invokeGetGenPacket,
   invokeGetGenResult,
   invokeInsertSqlPacket,
-  invokeKillGenPackets,
 } from "@/api/fill"
 import { Icon } from "@iconify/react"
 import { save } from "@tauri-apps/plugin-dialog"
@@ -68,7 +68,7 @@ export default function RenderPreview({
 
   useEffect(() => {
     setTablePacket(null)
-    handleKillGenPackets()
+    handleClearGenPackets()
   }, [tableSpec?.name])
 
   useEffect(() => {
@@ -173,9 +173,9 @@ export default function RenderPreview({
       })
   }
 
-  async function handleKillGenPackets() {
+  async function handleClearGenPackets() {
     try {
-      invokeKillGenPackets()
+      invokeClearGenPackets()
     } catch (error) {
       console.log("Error", error)
     }
@@ -291,7 +291,7 @@ export default function RenderPreview({
         </div>
         <div className="mt-5">
           <button
-            onClick={handleKillGenPackets}
+            onClick={handleClearGenPackets}
             className={cn(
               "flex items-center rounded px-6 py-2 text-muted-foreground",
               "bg-muted hover:bg-red-600 hover:text-white"

@@ -1,10 +1,10 @@
 import logging
-import os
 from typing import Optional
 
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 
+from core.settings import DB_PATH
 from core.utils.models import (
     Base,
     ColumnSpecModel,
@@ -12,8 +12,7 @@ from core.utils.models import (
     TableSpecModel,
     UsageStatModel,
 )
-from core.utils.types import ColumnSpec, DbCredsSchema, TableSpec, UsageStatSchema
-from core.settings import DB_PATH
+from core.utils.types import DbCredsSchema, DBDialectType, TableSpec, UsageStatSchema
 
 
 class DBFRegistry:
@@ -33,7 +32,7 @@ class DBFRegistry:
             row = (
                 session.query(DbCredsModel)
                 .order_by(DbCredsModel.last_connected.desc())
-            .first()
+                .first()
             )
             return DbCredsSchema.model_validate(row) if row else None
 
@@ -47,12 +46,12 @@ class DBFRegistry:
             return schema.id
 
     def exists(
-        self, name: str, host: str, port: str, user: str
+        self, name: str, host: str, port: str, user: str, dialect: str | DBDialectType
     ) -> Optional[DbCredsSchema]:
         with self.session() as session:
             row = (
                 session.query(DbCredsModel)
-                .filter_by(name=name, host=host, port=port, user=user)
+                .filter_by(name=name, host=host, port=port, user=user, dialect=dialect)
                 .first()
             )
             return DbCredsSchema.model_validate(row) if row else None
@@ -66,6 +65,7 @@ class DBFRegistry:
                     DbCredsModel.host,
                     DbCredsModel.port,
                     DbCredsModel.user,
+                    DbCredsModel.dialect,
                 )
                 .tuples()
                 .all()

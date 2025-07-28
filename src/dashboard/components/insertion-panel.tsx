@@ -271,7 +271,19 @@ export default function InsertionPanel({
               <div>
                 <div className="mb-2 flex items-center space-x-2">
                   <h2 className="text-2xl font-semibold tracking-wide">
-                    {tableData?.name || "Loading..."}
+                    {tableData?.name || (
+                      <span>
+                        Loading
+                        {[0, 300, 600, 900].map((delay, i) => (
+                          <span
+                            key={i}
+                            className={`animate-fade-loop h-6 w-6 text-muted-foreground animation-delay-${delay}`}
+                          >
+                            .
+                          </span>
+                        ))}
+                      </span>
+                    )}
                   </h2>
                   <Icon
                     key={activeTable}

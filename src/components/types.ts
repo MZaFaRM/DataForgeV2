@@ -11,10 +11,9 @@ export type CliRequest<T> = Record<string, unknown> & {
   body?: T
 }
 
-export interface DBDialectType {
-  MYSQL: "mysql"
-  UNKNOWN: "unknown"
-}
+export type DBDialectType =
+  | "mysql"
+  | "unknown"
 
 export interface DBCreds {
   id?: number

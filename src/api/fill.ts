@@ -1,4 +1,9 @@
-import { PacketProgress, TablePacket, TablePacketRequest, TableSpec } from "@/components/types"
+import {
+  PacketProgress,
+  TablePacket,
+  TablePacketRequest,
+  TableSpec,
+} from "@/components/types"
 
 import { invokeCliRequest } from "./cli"
 
@@ -44,9 +49,9 @@ export function invokeExportSqlPacket(packetId: string, path: string) {
   })
 }
 
-export function invokeKillGenPackets() {
+export function invokeClearGenPackets() {
   return invokeCliRequest<void, string>({
-    kind: "kill_gen_packets",
+    kind: "clear_gen_packets",
   })
 }
 

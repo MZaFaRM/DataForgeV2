@@ -9,10 +9,7 @@ import {
   invokeListDbCreds,
 } from "@/api/db"
 import { Icon } from "@iconify/react"
-import {
-  CaretSortIcon,
-  CheckIcon,
-} from "@radix-ui/react-icons"
+import { CaretSortIcon, CheckIcon } from "@radix-ui/react-icons"
 import { Eye, EyeOff } from "lucide-react"
 
 import { cn } from "@/lib/utils"
@@ -43,7 +40,7 @@ import {
   PopoverTrigger,
 } from "@/components/ui/popover"
 import { Icons } from "@/components/icons"
-import { DBCreds } from "@/components/types"
+import { DBCreds, DBDialectType } from "@/components/types"
 
 interface ConnectionSelectorProps {
   dbCreds: DBCreds | null
@@ -194,6 +191,7 @@ export default function ConnectionSelector({
       user: newDbCreds?.user ?? "root",
       name: newDbCreds?.name ?? "",
       password: newDbCreds?.password ?? "",
+      dialect: newDbCreds?.dialect || "mysql",
     })
       .then((res) => {
         // console.log("Connected to the database:", res)
@@ -406,7 +404,7 @@ export default function ConnectionSelector({
                         icon="logos:mysql-icon"
                         className="mr-2 h-5 w-5 text-muted-foreground"
                       />
-                      MySQL (That's all for now)
+                      MySQL (Working on more dialects)
                       <CaretSortIcon className="ml-auto h-4 w-4" />
                     </Button>
                   </PopoverTrigger>

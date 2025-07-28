@@ -14,7 +14,7 @@ def run_sql_worker(url: str, sql: str, result_queue):
             result = conn.execute(sql_text(sql))
 
             if result.returns_rows:
-                rows = result.fetchall()
+                rows = result.fetchall()[:250] # Limit to 250 rows
                 headers = list(result.keys())
                 output.extend(
                     tabulate(rows, headers=headers, tablefmt="grid").splitlines()

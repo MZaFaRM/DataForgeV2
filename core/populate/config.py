@@ -1,3 +1,4 @@
+from datetime import datetime
 import logging
 from typing import Optional
 
@@ -54,7 +55,11 @@ class DBFRegistry:
                 .filter_by(name=name, host=host, port=port, user=user, dialect=dialect)
                 .first()
             )
-            return DbCredsSchema.model_validate(row) if row else None
+            if row:
+                row.last_connected = datetime.now() # type: ignore
+                session.commit()
+                return DbCredsSchema.model_validate(row)
+            return None
 
     def list_creds(self) -> list[DbCredsSchema]:
         with self.session() as session:

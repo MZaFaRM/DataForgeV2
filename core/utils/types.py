@@ -11,6 +11,7 @@ class GeneratorType(str, enum.Enum):
     regex = "regex"
     foreign = "foreign"
     python = "python"
+    constant = "constant"
     autoincrement = "autoincrement"
     computed = "computed"
     null = "null"

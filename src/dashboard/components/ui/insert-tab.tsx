@@ -218,47 +218,49 @@ function GeneratorTypeSelect({
               Auto Increment
             </div>
           </SelectItem>
-        ) : column.computed ? (
-          <SelectItem value="computed">
-            <div className="flex items-center">
-              <Icon
-                icon="fa-solid:code"
-                className="mr-2 h-4 w-4 text-blue-600"
-              />
-              Computed
-            </div>
-          </SelectItem>
         ) : (
-          <>
-            <SelectItem value="faker">
+          column.computed && (
+            <SelectItem value="computed">
               <div className="flex items-center">
                 <Icon
-                  icon="ep:collection"
-                  className="mr-2 h-4 w-4 text-purple-400"
+                  icon="fa-solid:code"
+                  className="mr-2 h-4 w-4 text-blue-600"
                 />
-                Library
+                Computed
               </div>
             </SelectItem>
-            <SelectItem value="regex">
-              <div className="flex items-center">
-                <Icon
-                  icon="mdi:regex"
-                  className="mr-2 h-4 w-4 text-green-500"
-                />
-                Regex
-              </div>
-            </SelectItem>
-            <SelectItem value="python">
-              <div className="flex items-center">
-                <Icon
-                  icon="material-icon-theme:python"
-                  className="mr-2 h-4 w-4"
-                />
-                Py Script
-              </div>
-            </SelectItem>
-          </>
+          )
         )}
+        <SelectItem value="faker">
+          <div className="flex items-center">
+            <Icon
+              icon="ep:collection"
+              className="mr-2 h-4 w-4 text-purple-400"
+            />
+            Library
+          </div>
+        </SelectItem>
+        <SelectItem value="regex">
+          <div className="flex items-center">
+            <Icon icon="mdi:regex" className="mr-2 h-4 w-4 text-green-500" />
+            Regex
+          </div>
+        </SelectItem>
+        <SelectItem value="python">
+          <div className="flex items-center">
+            <Icon icon="material-icon-theme:python" className="mr-2 h-4 w-4" />
+            Py Script
+          </div>
+        </SelectItem>
+        <SelectItem value="constant">
+          <div className="flex items-center">
+            <Icon
+              icon="raphael:locked"
+              className="mr-2 h-4 w-4 text-yellow-300"
+            />
+            Constant
+          </div>
+        </SelectItem>
         {column.nullable && (
           <SelectItem value="null">
             <div className="flex items-center">
@@ -429,6 +431,19 @@ function RenderGenerator({
         basicSetup={{
           lineNumbers: false,
           foldGutter: false,
+        }}
+      />
+    </div>
+  ) : generatorType === "constant" ? (
+    <div className="w-[350px] items-center rounded border bg-muted flex">
+      <Icon icon="oui:vis-text" className="h-6 w-6 m-2 mr-2" />
+      <Input
+        placeholder="Constant value"
+        className="rounded-none border-0"
+        value={generatorInput || selected || ""}
+        onChange={(e) => setGeneratorInput(e.target.value)}
+        onBlur={() => {
+          setSelected(generatorInput)
         }}
       />
     </div>

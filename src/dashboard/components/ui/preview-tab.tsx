@@ -120,8 +120,8 @@ export default function RenderPreview({
 
   useEffect(() => {
     if (!pendingJobId) return
-
     setLoading(true)
+    const startTime = Date.now()
     const interval = setInterval(() => {
       invokeGetGenResult(pendingJobId)
         .then((result) => {
@@ -134,8 +134,14 @@ export default function RenderPreview({
             setProgress(null)
             return
           } else {
-            console.log("Polling result:", result)
-            setProgress(result.progress)
+            setProgress({
+              ...result.progress,
+              eta: calculateEta(
+                result.progress.row,
+                result.progress.total,
+                startTime
+              ),
+            })
           }
         })
         .catch((error) => {
@@ -144,10 +150,37 @@ export default function RenderPreview({
           clearInterval(interval)
           setPendingJobId(null)
         })
-    }, 1000)
+    }, 500)
 
     return () => clearInterval(interval)
   }, [pendingJobId])
+
+  function calculateEta(
+    row: number,
+    total: number,
+    startTime: number
+  ): string | null {
+    if (!total || total <= 0) return null
+
+    const elapsed = Date.now() - startTime
+    const progress = row / total
+
+    if (progress > 0) {
+      const estimatedTotal = elapsed / progress
+      const etaMs = estimatedTotal - elapsed
+      const seconds = Math.max(0, Math.floor(etaMs / 1000))
+      const mins = Math.floor(seconds / 60)
+      const secs = seconds % 60
+
+      if (mins > 0) {
+        return `${mins} minute${mins !== 1 ? "s" : ""} ${secs} second${secs !== 1 ? "s" : ""} remaining`
+      } else {
+        return `${secs} second${secs !== 1 ? "s" : ""} remaining`
+      }
+    }
+
+    return null
+  }
 
   function handleInsertPacket() {
     if (!tablePacket) return
@@ -264,7 +297,7 @@ export default function RenderPreview({
   }
 
   return (
-    <div className={cn("flex h-full flex-col", loading && "cursor-wait")}>
+    <div className={cn("flex h-full flex-col overflow-auto", loading && "cursor-wait")}>
       <div
         className={cn(
           "bg-current-foreground flex h-full flex-col items-center justify-center rounded-md bg-gradient-to-br text-gray-800",
@@ -280,30 +313,23 @@ export default function RenderPreview({
         </p>
         <div className="w-full max-w-lg">
           <div className="mt-4 flex w-full justify-between space-x-2 text-foreground">
-            <p>{progress?.status + "..."}</p>
-            <p>{progress?.column}</p>
+            <p className="text-sm font-semibold">{progress?.status + "..."}</p>
+            <p className="text-sm font-semibold text-muted-foreground">
+              {progress?.column}
+            </p>
           </div>
           <div className="mt-4 w-full max-w-lg">
             <Progress
               value={((progress?.row ?? 0) / (progress?.total ?? 1)) * 100}
             />
           </div>
-        </div>
-        <div className="mt-5">
-          <button
-            onClick={handleClearGenPackets}
-            className={cn(
-              "flex items-center rounded px-6 py-2 text-muted-foreground",
-              "bg-muted hover:bg-red-600 hover:text-white"
-            )}
-          >
-            <Icon icon="la:skull-crossbones" className="mr-4 h-4 w-4" /> Stop
-            Generation
-          </button>
+          <p className="text-sm font-regular text-muted-foreground mt-2 w-full text-center">
+            {progress?.eta ? progress.eta : "Calculating ETA..."}
+          </p>
         </div>
       </div>
-      <div className={cn("flex-1", loading && "hidden")}>
-        <Table className="flex-shrink-0">
+      <div className={cn("flex-1 overflow-auto", loading && "hidden")}>
+        <Table key={tableSpec?.name || "unknown"}>
           <TableHeader>
             {tablePacket ? (
               <TableRow>
@@ -385,24 +411,38 @@ export default function RenderPreview({
       </div>
       <div className="sticky bottom-0 mt-auto flex items-center justify-center bg-muted p-2">
         <div>
-          <button
-            className={cn(
-              "inline-flex items-center space-x-2 rounded-md border px-3 py-2 text-sm",
-              "font-medium hover:bg-accent hover:text-accent-foreground",
-              "disabled:cursor-not-allowed disabled:opacity-50",
-              needsRefresh && "bg-purple-500 text-white"
-            )}
-            disabled={loading}
-            onClick={() => {
-              HandleGenerateTablePackets()
-            }}
-          >
-            <Icon
-              icon="streamline-ultimate:factory-industrial-robot-arm-1-bold"
-              className={cn("h-4 w-4", !needsRefresh && "text-purple-500")}
-            />
-            <span>Generate</span>
-          </button>
+          {loading ? (
+            <button
+              onClick={handleClearGenPackets}
+              className={cn(
+                "inline-flex items-center space-x-2 rounded-md border px-3 py-2 text-sm",
+                "font-medium hover:bg-accent hover:text-red-500",
+                "disabled:cursor-not-allowed disabled:opacity-50",
+                "w-28 bg-red-500 text-white"
+              )}
+            >
+              <Icon icon="la:skull-crossbones" className="mr-4 h-4 w-4" />
+              Cancel
+            </button>
+          ) : (
+            <button
+              className={cn(
+                "inline-flex items-center space-x-2 rounded-md border px-3 py-2 text-sm",
+                "font-medium hover:bg-accent hover:text-accent-foreground",
+                "w-28 disabled:cursor-not-allowed disabled:opacity-50",
+                needsRefresh && "bg-purple-500 text-white"
+              )}
+              onClick={() => {
+                HandleGenerateTablePackets()
+              }}
+            >
+              <Icon
+                icon="streamline-ultimate:factory-industrial-robot-arm-1-bold"
+                className={cn("h-4 w-4", !needsRefresh && "text-purple-500")}
+              />
+              <span>Generate</span>
+            </button>
+          )}
         </div>
         <div>
           <div

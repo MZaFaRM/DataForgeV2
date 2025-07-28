@@ -70,6 +70,7 @@ export type GeneratorType =
   | "autoincrement"
   | "computed"
   | "python"
+  | "constant"
   | "null"
 
 export interface TableSpec {
@@ -107,6 +108,7 @@ export interface PacketProgress {
   row: number
   total: number
   column: string | null
+  eta: string | null
 }
 
 export interface TablePacketRequest {

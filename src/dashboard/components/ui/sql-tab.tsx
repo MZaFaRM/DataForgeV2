@@ -39,6 +39,7 @@ export default function SqlInsertionTab({
       rawQuery.endsWith(";\n") ||
       (rawQuery.endsWith("\n") && rawQuery.trim() === "")
     ) {
+      setQuery(rawQuery.slice(0, -1))
       setQueryHistory((prev) => {
         return [...prev, rawQuery.slice(0, -1)]
       })
@@ -60,7 +61,7 @@ export default function SqlInsertionTab({
       let output: string[] = []
 
       if (rawQuery.trim() !== "") {
-        console.log("quer:", rawQuery.trim())
+        console.log("query:", rawQuery.trim())
         output = await runSql(rawQuery.trim())
       }
 
@@ -122,7 +123,7 @@ export default function SqlInsertionTab({
   }
 
   return (
-    <div className="flex h-full overflow-auto" ref={ref}>
+    <div className={cn("flex h-full overflow-auto", loading && "animate-pulse")} ref={ref}>
       <div className="mx-4 mt-4">
         {sqlLog.log.map((log, index) => (
           <pre
@@ -145,6 +146,7 @@ export default function SqlInsertionTab({
           <textarea
             rows={1}
             value={query}
+            disabled={loading}
             onChange={(e) => newLine(e.target.value)}
             onInput={(e) => {
               e.currentTarget.style.height = "auto"

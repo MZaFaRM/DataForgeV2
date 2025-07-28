@@ -64,7 +64,7 @@ export function Menu() {
           <button
             className={cn(
               "flex items-center gap-2 rounded bg-transparent px-6 py-2 text-sm font-medium",
-              "text-muted-foreground hover:bg-accent hover:text-accent-foreground"
+              "text-muted-foreground hover:bg-card hover:text-accent-foreground"
             )}
             onClick={() => openUrl("https://github.com/MZaFaRM/DataForgeV2")}
           >
@@ -74,7 +74,7 @@ export function Menu() {
           <button
             className={cn(
               "flex items-center gap-2 rounded bg-transparent px-2 py-2 text-sm font-medium",
-              "mr-4 text-muted-foreground hover:bg-accent hover:text-accent-foreground"
+              "mr-4 text-muted-foreground hover:bg-card hover:text-accent-foreground"
             )}
             onClick={() => openUrl("https://buymeacoffee.com/mzafarm")}
           >

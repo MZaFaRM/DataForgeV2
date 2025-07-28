@@ -55,7 +55,6 @@ export default function InsertTab({
   setTableSpec,
 }: InsertTabProps) {
   const [hoveredGroup, setHoveredGroup] = useState<string[] | null>(null)
-  // console.log("TableSpec:", tableSpec)
 
   return (
     <div className="flex h-full w-full flex-col overflow-auto">
@@ -295,11 +294,8 @@ function RenderGenerator({
   const [open, setOpen] = useState(false)
   const { theme } = useTheme()
   const pythonPlaceholder = [
-    "# You can use builtins + faker",
+    "# You can import builtins + faker",
     "# Python generators run *after* faker, foreign, regex, etc.",
-    "# For reproducible randomness, use the SEED variable like:",
-    "#   import random; random.seed(SEED)",
-    "#   faker.seed_instance(SEED)",
     "# Use @order(int) to set execution order between python generators",
     "# Example:",
     "#   @order(1)",
@@ -308,6 +304,7 @@ function RenderGenerator({
   ].join("\n")
 
   useEffect(() => {
+    setGeneratorInput(selected || null)
     if (generatorType === "foreign") {
       setSelected(`${column.foreignKeys?.table}__${column.foreignKeys?.column}`)
     } else if (generatorType === "autoincrement") {

@@ -15,14 +15,10 @@ from .factory import ContextFactory, DatabaseFactory, GeneratorFactory
 
 
 class Populator:
-    def __init__(self, seed: int | None = None):
+    def __init__(self):
         self.faker = Faker()
-        self.seed = seed
-        if seed is not None:
-            self.faker.seed_instance(seed)
-
         self.cache = {}
-        self.tf = GeneratorFactory(self.seed)
+        self.tf = GeneratorFactory()
 
     @property
     def methods(self) -> list[str]:
@@ -53,8 +49,8 @@ class Populator:
         errors, column_entries = self.build_table_entries(
             dbf, ordered_columns, table_spec, progress
         )
-        
-        progress["column"] = "" 
+
+        progress["column"] = ""
         columns = list(column_entries.keys())
         rows = list(map(list, zip(*column_entries.values())))
 
@@ -63,7 +59,7 @@ class Populator:
             name=table_spec.name,
             columns=columns,
             entries=rows,
-            errors=errors,
+            errors=errors + _errors,
             page_size=table_spec.page_size,
             page=0,
             total_entries=len(rows),
@@ -75,6 +71,19 @@ class Populator:
         total_entries = len(packet.entries)
         total_pages = (total_entries + page_size - 1) // page_size
         id = str(uuid.uuid4())
+
+        if total_entries == 0:
+            return TablePacket(
+                id=id,
+                name=packet.name,
+                columns=packet.columns,
+                entries=[],
+                errors=packet.errors,
+                page=0,
+                page_size=page_size,
+                total_entries=0,
+                total_pages=0,
+            )
 
         self._cached_packets = [
             TablePacket(
@@ -128,6 +137,9 @@ class Populator:
 
         metadata = dbf.get_table_metadata(table_spec.name)
         errors: list[ErrorPacket] = []
+
+        if not ordered_columns:
+            return errors, {col.name: [None] for col in metadata.columns}
 
         context = ContextFactory(
             row_idx=0,
@@ -240,7 +252,7 @@ class Populator:
                     ErrorPacket(
                         column=c_spec.name,
                         type="error",
-                        msg=f"Error in column '{c_spec.name}': {str(e)}",
+                        msg=f"Error '{c_spec.name}' {str(e)}",
                     )
                 )
 

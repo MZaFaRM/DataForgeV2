@@ -8,20 +8,20 @@ import re
 from collections.abc import Sequence
 from dataclasses import dataclass
 from datetime import datetime
-from multiprocessing import Process, Queue
 from numbers import Number
 from pathlib import Path
 from queue import Empty
 import subprocess
 import sys
 import types
+import traceback
 from typing import Any, Callable, Generator
 from urllib.parse import quote_plus
 
-import faker
 import networkx as nx
 import rstr
 from faker import Faker
+import faker
 from networkx import Graph
 from sqlalchemy import Connection, create_engine, inspect
 from sqlalchemy import text as sql_text
@@ -463,28 +463,6 @@ class DatabaseFactory:
         ]
         return {"log": banner, "prompt": self.dialect}
 
-    def run_sql(self, sql: str) -> list:
-        try:
-            timeout = 10
-            payload = json.dumps([self.url, sql, 10]).encode()
-            if getattr(sys, "frozen", False):
-                exe = os.path.join(
-                    getattr(sys, "_MEIPASS"), "subprocess", "safe_sql_eval.exe"
-                )
-                cmd = [exe]
-            else:
-                cmd = [sys.executable, "-m", "core.subprocess.safe_sql_eval"]
-
-            proc = subprocess.run(
-                cmd, input=payload, capture_output=True, timeout=timeout
-            )
-            return json.loads(proc.stdout)
-
-        except subprocess.TimeoutExpired:
-            return [f"ERROR 408 (HYT00): Query timed out after {timeout} sec"]
-        except Exception as e:
-            return [f"ERROR 8008 (4200): {str(e)}"]
-
     def insert_packet(self, packet: TablePacket):
         table_name = packet.name
         if not packet.columns or not packet.entries:
@@ -530,13 +508,6 @@ class DatabaseFactory:
             + ";"
         )
 
-        try:
-            with self.engine.begin() as conn:
-                conn.execute(sql_text(sql))
-                raise ManualException("Force rollback for preview")
-        except ManualException:
-            pass
-
         with open(path, "w") as f:
             f.write(
                 f"\n-- Exported at {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n"
@@ -567,12 +538,8 @@ class ContextFactory:
 
 
 class GeneratorFactory:
-    def __init__(self, seed: int | None) -> None:
+    def __init__(self) -> None:
         self.faker = Faker()
-        self.seed = seed
-
-        if seed is not None:
-            self.faker.seed_instance(seed)
 
     def make(
         self, type: GType
@@ -596,11 +563,10 @@ class GeneratorFactory:
     def make_python(self, context: ContextFactory) -> Generator[str | None, None, None]:
         try:
             tree = ast.parse(context.col_spec.generator or "")
-
+                        
             # Prepare the environment for execution
             env = {
                 "faker": faker,
-                "SEED": self.seed,
                 "columns": {},
                 "order": lambda x: (lambda f: f),
                 "__builtins__": __builtins__,
@@ -618,6 +584,8 @@ class GeneratorFactory:
 
         except SyntaxError as e:
             raise VerificationError(f"Syntax Error in Python script: {e}")
+        except Exception as e:
+            raise Exception(str(e), str(traceback.format_exc()))
 
     def make_regex(self, context: ContextFactory) -> Generator[str | None, None, None]:
         col = context.column
@@ -687,29 +655,23 @@ class GeneratorFactory:
         return True
 
     def check_python(self, generator: str) -> int:
-        try:
-            tree = ast.parse(generator)
-
-            for node in tree.body:
-                if isinstance(node, ast.FunctionDef) and node.name == "generator":
-                    if len(node.args.args) != 1 or (node.args.args[0].arg != "columns"):
-                        raise ValueError(
-                            "generator() must take exactly 1 arg: 'columns'."
-                        )
-                    for deco in node.decorator_list:
-                        if (
-                            isinstance(deco, ast.Call)
-                            and getattr(deco.func, "id", "") == "order"
+        tree = ast.parse(generator)
+        for node in tree.body:
+            if isinstance(node, ast.FunctionDef) and node.name == "generator":
+                if len(node.args.args) != 1 or (node.args.args[0].arg != "columns"):
+                    raise ValueError("generator() must take exactly 1 arg: 'columns'.")
+                for deco in node.decorator_list:
+                    if (
+                        isinstance(deco, ast.Call)
+                        and getattr(deco.func, "id", "") == "order"
+                    ):
+                        if isinstance(deco.args[0], ast.Constant) and isinstance(
+                            deco.args[0].value, int
                         ):
-                            if isinstance(deco.args[0], ast.Constant) and isinstance(
-                                deco.args[0].value, int
-                            ):
-                                return deco.args[0].value
-                            raise ValueError("@order requires int type arg")
-                    raise ValueError("Missing @order(int) decorator")
-            raise ValueError("No valid generator() function found")
-        except SyntaxError as e:
-            raise ValueError(f"Syntax Error: {e}")
+                            return deco.args[0].value
+                        raise ValueError("@order requires int type arg")
+                raise ValueError("Missing @order(int) decorator")
+        raise ValueError("No valid generator() function found")
 
     def check_regex(self, generator: str):
         # This will raise an error if the regex is invalid

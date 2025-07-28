@@ -3,11 +3,13 @@ from multiprocessing import Manager, Process, Queue
 from random import SystemRandom
 import sys
 import threading
+import time
 import traceback
 from typing import Any
 import uuid
 
 from core.helpers import requires
+from core.populate.subprocess import generate_packets, run_sql_worker
 from core.utils.types import TableSpec
 
 from core.populate.populator import Populator
@@ -90,8 +92,9 @@ class Runner:
                 return self._ok(last_connected.model_dump())
             except Exception as e:
                 self.dbf.disconnect()
-                return self._err(f"Failed to connect to last connected database: {str(e)}")
-            
+                return self._err(
+                    f"Failed to connect to last connected database: {str(e)}"
+                )
 
     @requires("host", "user", "port", "name", "password")
     def _handle_set_db_connect(self, creds: dict) -> dict:
@@ -199,17 +202,6 @@ class Runner:
         self._generation_id = str(uuid.uuid4())
         self._result_queue = Queue()
 
-        def target(q, dbf: DatabaseFactory, spec_dict: dict, seed: int, progress: dict):
-            try:
-                pop = Populator(seed=seed)
-                specs, packet = pop.build_packets(
-                    dbf, TableSpec(**spec_dict), progress=progress
-                )
-                dbf.registry.save_specs(specs)
-                q.put(packet)
-            except Exception as e:
-                q.put(Response(status="error", error=str(e)).to_dict())
-
         self._progress = Manager().dict()
         self._progress.update(
             {
@@ -220,12 +212,11 @@ class Runner:
             }
         )
         self._active_process = Process(
-            target=target,
+            target=generate_packets,
             args=(
                 self._result_queue,
-                self.dbf,
+                self.dbf.to_schema(),
                 body,
-                SystemRandom().randint(1, 999999999),
                 self._progress,
             ),
         )
@@ -248,12 +239,11 @@ class Runner:
         )
 
     @requires()
-    def _handle_kill_gen_packets(self, _=None) -> dict:
+    def _handle_clear_gen_packets(self, _=None) -> dict:
         if hasattr(self, "_active_process") and self._active_process.is_alive():
             self._active_process.terminate()
             self._active_process.join()
-            return self._ok("Generation process killed.")
-        return self._err("No active generation process to kill.")
+        return self._ok("Generation process cleared.")
 
     @requires("job_id")
     def _handle_poll_gen_status(self, body: dict) -> dict:
@@ -278,7 +268,11 @@ class Runner:
                 return self._ok(response)
             return self._err("No result. Process may not have started or crashed.")
 
-        paginated = self.populator.paginate_table_packet(self._result_queue.get())
+        if res := self._result_queue.get():
+            if isinstance(res, Exception):
+                return self._err(f"Error during generation: {str(res)}")
+
+        paginated = self.populator.paginate_table_packet(res)
         response.update(
             {
                 "status": "done",
@@ -302,9 +296,27 @@ class Runner:
     @requires("sql")
     def _handle_run_sql_query(self, body: dict) -> dict:
         try:
-            return self._ok(self.dbf.run_sql(body["sql"]))
+            result_queue = Queue()
+            p = Process(
+                target=run_sql_worker, args=(self.dbf.url, body["sql"], result_queue)
+            )
+            p.start()
+
+            timeout = 10
+            start = time.time()
+            while time.time() - start < timeout:
+                if not p.is_alive():
+                    if not result_queue.empty():
+                        return self._ok(result_queue.get())
+                    return self._ok([""])
+                time.sleep(0.1)
+
+            p.terminate()
+            return self._ok(
+                [f"ERROR 408 (HYT00): Query timed out after {timeout:.2f} sec"]
+            )
         except Exception as e:
-            return self._err(f"SQL execution failed: {str(e)}")
+            return self._err([f"ERROR 8008 (4200): {str(e)}"])
 
     @requires()
     def _handle_get_logs_read(self, body: dict) -> dict:

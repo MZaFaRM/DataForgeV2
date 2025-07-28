@@ -40,21 +40,9 @@ export function AboutDialog() {
         </div>
 
         <DialogTitle className="flex flex-col items-center gap-2 pt-2">
-          Tauri UI ({name})
+          {name}
           <span className="flex gap-1 font-mono text-xs font-medium">
-            Version {version} ({arc})
-            <span className="font-sans font-medium text-gray-400">
-              (
-              <span
-                className="cursor-pointer text-blue-500"
-                onClick={() =>
-                  open("https://github.com/agmmnn/tauri-ui/releases/tag/v0.2.0")
-                }
-              >
-                release notes
-              </span>
-              )
-            </span>
+            Version {version} 
           </span>
         </DialogTitle>
 

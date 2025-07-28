@@ -12,6 +12,7 @@
   "app": {
     "windows": [
       {
+        "decorations": true,
         "title": "DataForge",
         "width": 1350,
         "height": 825,

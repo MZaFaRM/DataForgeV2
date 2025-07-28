@@ -211,7 +211,6 @@ export default function InsertionPanel({
     }
 
     // Step 5: Apply once at the end
-    // console.log("Final loaded table spec:", ts)
     setTableSpec(ts)
   }
 

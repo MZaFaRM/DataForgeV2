@@ -4,12 +4,7 @@ import { UpdateIcon } from "@radix-ui/react-icons"
 import { getName, getTauriVersion, getVersion } from "@tauri-apps/api/app"
 import { arch } from "@tauri-apps/plugin-os"
 import { open } from "@tauri-apps/plugin-shell"
-import {
-  GithubIcon,
-  HomeIcon,
-  LinkIcon,
-  LucideArrowUpRight,
-} from "lucide-react"
+import { GithubIcon } from "lucide-react"
 
 import { Icons } from "./icons"
 import { Button, buttonVariants } from "./ui/button"
@@ -36,18 +31,22 @@ export function AboutDialog() {
     <DialogContent className="overflow-clip pb-2">
       <DialogHeader className="flex items-center text-center">
         <div className="rounded-full bg-background p-[6px] text-slate-600 drop-shadow-none transition duration-1000 hover:text-slate-800 hover:drop-shadow-[0_0px_10px_rgba(0,10,50,0.50)] dark:hover:text-slate-400 ">
-          <Icons.logo className="h-12 w-12" />
+          <img
+            src="/icon.png"
+            alt="App icon"
+            className="h-12 w-12 rounded-full"
+          />
         </div>
 
         <DialogTitle className="flex flex-col items-center gap-2 pt-2">
           {name}
           <span className="flex gap-1 font-mono text-xs font-medium">
-            Version {version} 
+            Version {version}
           </span>
         </DialogTitle>
 
         <DialogDescription className=" text-foreground">
-          App description.
+          A Database population tool.
         </DialogDescription>
 
         <span className="text-xs text-gray-400">{updateText}</span>
@@ -59,13 +58,13 @@ export function AboutDialog() {
       </span>
       <DialogFooter className="flex flex-row items-center border-t pt-2 text-slate-400 ">
         <div className="mr-auto flex flex-row gap-2">
-          <HomeIcon
+          {/* <HomeIcon
             className="h-5 w-5 cursor-pointer transition hover:text-slate-300"
-            onClick={() => open("https://github.com/agmmnn/tauri-ui")}
-          />
+            onClick={() => open("https://github.com/MZaFaRM/DataForgeV2")}
+          /> */}
           <GithubIcon
             className="h-5 w-5 cursor-pointer transition hover:text-slate-300 "
-            onClick={() => open("https://github.com/agmmnn/tauri-ui")}
+            onClick={() => open("https://github.com/MZaFaRM/DataForgeV2")}
           />
         </div>
 

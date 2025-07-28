@@ -15,6 +15,8 @@ import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
+  DropdownMenuRadioGroup,
+  DropdownMenuRadioItem,
   DropdownMenuTrigger,
 } from "./ui/dropdown-menu"
 
@@ -25,7 +27,11 @@ export function Menu() {
     <div className="flex items-center border-none bg-muted py-1 lg:pl-3">
       <div className="flex w-full items-center px-2 py-1">
         <div className="mr-4 inline-flex items-center text-cyan-500">
-          <Icon icon="simple-icons:curseforge" className="h-5 w-5" />
+          <img
+            src="/icon.png"
+            alt="App icon"
+            className="h-8 w-8"
+          />
           <span className="ml-2 font-semibold text-foreground">DataForge</span>
         </div>
 
@@ -34,15 +40,20 @@ export function Menu() {
             Theme
           </DropdownMenuTrigger>
           <DropdownMenuContent>
-            <DropdownMenuItem onClick={() => setTheme("light")}>
-              <SunIcon className="mr-2 h-4 w-4" /> Light
-            </DropdownMenuItem>
-            <DropdownMenuItem onClick={() => setTheme("dark")}>
-              <MoonIcon className="mr-2 h-4 w-4" /> Dark
-            </DropdownMenuItem>
-            <DropdownMenuItem onClick={() => setTheme("system")}>
-              <LaptopIcon className="mr-2 h-4 w-4" /> System
-            </DropdownMenuItem>
+            <DropdownMenuRadioGroup value={theme} onValueChange={setTheme}>
+              <DropdownMenuRadioItem value="light">
+                <SunIcon className="mr-2 inline h-4 w-4" />
+                Light
+              </DropdownMenuRadioItem>
+              <DropdownMenuRadioItem value="dark">
+                <MoonIcon className="mr-2 inline h-4 w-4" />
+                Dark
+              </DropdownMenuRadioItem>
+              <DropdownMenuRadioItem value="system">
+                <LaptopIcon className="mr-2 inline h-4 w-4" />
+                System
+              </DropdownMenuRadioItem>
+            </DropdownMenuRadioGroup>
           </DropdownMenuContent>
         </DropdownMenu>
 

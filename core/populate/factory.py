@@ -152,11 +152,11 @@ class DatabaseFactory:
         self.registry.reset_usage_stats(db_id=self.id)
 
     def setup_logging(self):
-        logger = logging.getLogger("sqlalchemy")
+        logger = logging.getLogger(f"user-sql-{self.name}")
         logger.setLevel(logging.INFO)
         logger.propagate = False
-
         logger.handlers.clear()
+        
         log_path = Path(os.path.join(LOG_PATH, f"{self.name}.sql.log"))
         log_path.parent.mkdir(parents=True, exist_ok=True)
 

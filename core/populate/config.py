@@ -1,5 +1,4 @@
 from datetime import datetime
-import logging
 from typing import Optional
 
 from sqlalchemy import create_engine
@@ -21,12 +20,6 @@ class DBFRegistry:
         self.engine = create_engine(f"sqlite:///{DB_PATH}", echo=False)
         Base.metadata.create_all(self.engine)
         self.session = sessionmaker(bind=self.engine)
-        for logger_name in [
-            "sqlalchemy.engine",
-            "sqlalchemy.pool",
-            "sqlalchemy.dialects",
-        ]:
-            logging.getLogger(logger_name).disabled = True
 
     def last_connected(self) -> Optional[DbCredsSchema]:
         with self.session() as session:

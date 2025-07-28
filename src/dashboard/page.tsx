@@ -40,7 +40,7 @@ export default function DashboardPage() {
                   className="semi-bold cursor-pointer text-yellow-300 hover:underline"
                   onClick={(e) => {
                     e.preventDefault()
-                    openUrl("https://github.com/MZaFaRM/dataforge-v2")
+                    openUrl("https://github.com/MZaFaRM/DataForgeV2")
                   }}
                 >
                   a star on github

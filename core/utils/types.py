@@ -100,8 +100,15 @@ class DbCredsSchema(BaseModel):
     port: int | str
     user: str
     password: str = ""
+    dialect: str
+    last_connected: Optional[datetime] = None
 
     model_config = {"from_attributes": True}
+
+
+class DBDialectType(str, enum.Enum):
+    MYSQL = "mysql"
+    UNKNOWN = "unknown"
 
 
 class UsageStatSchema(BaseModel):

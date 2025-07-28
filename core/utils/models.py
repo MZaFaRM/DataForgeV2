@@ -15,7 +15,7 @@ from sqlalchemy import (
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import declarative_base, relationship
 
-from core.utils.types import GeneratorType
+from core.utils.types import DBDialectType, GeneratorType
 
 Base = declarative_base()
 
@@ -23,14 +23,14 @@ Base = declarative_base()
 class DbCredsModel(Base):
     id = Column(Integer, primary_key=True, autoincrement=True)
     name = Column(String, nullable=False)
-    host = Column(Integer, nullable=False)
+    host = Column(String, nullable=False)
     port = Column(String, nullable=False)
     user = Column(String, nullable=False)
+    dialect = Column(Enum(DBDialectType), nullable=False)
     _password = Column("password", String, nullable=False)
     last_connected = Column(DateTime, nullable=False, server_default=func.now(), onupdate=func.now())
 
     __tablename__ = "db_creds"
-    __table_args__ = (UniqueConstraint("name", "host", "port", name="uq_dbcreds_identity"),)
 
     def __init__(self, **kwargs):
         raw_password = kwargs.pop("password", "")

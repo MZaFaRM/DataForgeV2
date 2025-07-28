@@ -1,4 +1,3 @@
-import { UUID } from "crypto"
 
 export type CliResponse<T> = Record<string, unknown> & {
   status: "ok" | "error"
@@ -12,12 +11,18 @@ export type CliRequest<T> = Record<string, unknown> & {
   body?: T
 }
 
+export interface DBDialectType {
+  MYSQL: "mysql"
+  UNKNOWN: "unknown"
+}
+
 export interface DBCreds {
   id?: number
   host: string
   user: string
   port: string
   name: string
+  dialect: DBDialectType
   password?: string
   error?: string
 }

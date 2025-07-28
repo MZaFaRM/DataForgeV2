@@ -37,7 +37,13 @@ from core.utils.exceptions import (
     ValidationWarning,
     VerificationError,
 )
-from core.utils.types import ColumnMetadata, ColumnSpec, DbCredsSchema, ForeignKeyRef
+from core.utils.types import (
+    ColumnMetadata,
+    ColumnSpec,
+    DbCredsSchema,
+    DBDialectType,
+    ForeignKeyRef,
+)
 from core.utils.types import GeneratorType as GType
 from core.utils.types import TableMetadata, TablePacket, UsageStatSchema
 
@@ -49,7 +55,7 @@ class DatabaseFactory:
         self.port = ""
         self.name = ""
         self.password = ""
-        self.DB_ENGINE = "mysql"
+        self.dialect = DBDialectType.UNKNOWN
         self.registry = DBFRegistry()
 
     def to_dict(self) -> dict:
@@ -67,10 +73,13 @@ class DatabaseFactory:
                 "Already connected to a database. Please create a new instance."
             )
 
-        for key in ["host", "user", "port", "name", "password"]:
+        for key in ["host", "user", "port", "name", "password", "dialect"]:
             if key not in data:
                 raise ValueError(f"Missing required key: {key}")
-            setattr(self, key, data[key])
+            if key == "dialect":
+                self.dialect = DBDialectType(data[key])
+            else:
+                setattr(self, key, data[key])
 
     def to_schema(self) -> DbCredsSchema:
         return DbCredsSchema(
@@ -80,6 +89,7 @@ class DatabaseFactory:
             port=self.port,
             user=self.user,
             password=self.password,
+            dialect=self.dialect,
         )
 
     def from_schema(self, schema: DbCredsSchema) -> None:
@@ -88,10 +98,13 @@ class DatabaseFactory:
                 "Already connected to a database. Please create a new instance."
             )
 
-        for key in ["id", "host", "user", "port", "name", "password"]:
+        for key in ["id", "host", "user", "port", "name", "password", "dialect"]:
             if not hasattr(schema, key):
                 raise ValueError(f"Missing required key: {key}")
-            setattr(self, key, getattr(schema, key, None))
+            elif key == "dialect":
+                self.dialect = DBDialectType(schema.dialect)
+            else:
+                setattr(self, key, getattr(schema, key, None))
 
         if hasattr(schema, "id"):
             self.id = schema.id
@@ -202,8 +215,9 @@ class DatabaseFactory:
                 name=self.name,
                 host=self.host,
                 port=self.port,
-                password=self.password,
+                dialect=self.dialect,
                 user=self.user,
+                password=self.password,
             )
         )
         self.id = pk
@@ -440,14 +454,14 @@ class DatabaseFactory:
             "Welcome to the DataForge monitor.  Commands end with ; or \\g.",
             f"Session started on {now} via {os}",
             "Connection id: 420",
-            f"Forge version: 1.0.0-alchemist ({self.DB_ENGINE.upper()})",
+            f"Forge version: 1.0.0-alchemist ({self.dialect.upper()})",
             "",
             "Copyright (c) 2025, DataForge Initiative.",
             " All bugs reserved.",
             "",
             "Type 'help;' or '\\h' for help. Type 'clear;' to clear the screen.",
         ]
-        return {"log": banner, "prompt": self.DB_ENGINE}
+        return {"log": banner, "prompt": self.dialect}
 
     def run_sql(self, sql: str) -> list:
         try:

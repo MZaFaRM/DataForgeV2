@@ -1,10 +1,10 @@
 [package]
 name = "DataForge"
-version = "0.9.0"
-description = "A Tauri App"
-authors = ["you"]
-license = ""
-repository = ""
+version = "1.9.0"
+description = "A Tauri-Python application for database population with sample data."
+authors = ["MZaFaRM"]
+license = "MIT"
+repository = "https://github.com/MZaFaRM/DataForgeV2"
 edition = "2021"
 rust-version = "1.77.2"
 

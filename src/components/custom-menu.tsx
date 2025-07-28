@@ -66,7 +66,7 @@ export function Menu() {
               "flex items-center gap-2 rounded bg-transparent px-6 py-2 text-sm font-medium",
               "text-muted-foreground hover:bg-accent hover:text-accent-foreground"
             )}
-            onClick={() => openUrl("https://github.com/MZaFaRM/dataforge-v2")}
+            onClick={() => openUrl("https://github.com/MZaFaRM/DataForgeV2")}
           >
             <Icon icon="cib:github" className="h-5 w-5" />
             Github

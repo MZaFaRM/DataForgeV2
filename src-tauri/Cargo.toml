@@ -4,7 +4,7 @@ version = "1.9.0"
 description = "A Tauri-Python application for database population with sample data."
 authors = ["MZaFaRM"]
 license = "MIT"
-repository = "https://github.com/MZaFaRM/DataSmithV2"
+repository = "https://github.com/MZaFaRM/DataSmith"
 edition = "2021"
 rust-version = "1.77.2"
 

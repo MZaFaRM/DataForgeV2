@@ -4,6 +4,7 @@ import { UpdateIcon } from "@radix-ui/react-icons"
 import { getName, getTauriVersion, getVersion } from "@tauri-apps/api/app"
 import { arch } from "@tauri-apps/plugin-os"
 import { open } from "@tauri-apps/plugin-shell"
+import { check } from "@tauri-apps/plugin-updater"
 import { GithubIcon } from "lucide-react"
 
 import { Icons } from "./icons"
@@ -22,10 +23,50 @@ export function AboutDialog() {
   const [name, setName] = useState("")
   const [tauriVersion, setTauriVersion] = useState("")
   const [arc, setArc] = useState("")
+  const [downloadState, setDownloadState] = useState<{
+    chunkLength: number
+    contentLength: number
+  }>({ chunkLength: 0, contentLength: 0 })
+
   getVersion().then((x) => setVersion(x))
   getName().then((x) => setName(x))
   getTauriVersion().then((x) => setTauriVersion(x))
   arch().then((x) => setArc(x))
+
+  async function handleUpdate() {
+    const update = await check()
+    if (!update) {
+      setUpdateText("You have the latest version.")
+      return
+    }
+
+    setUpdateText(
+      `found update ${update.version} from ${update.date} with notes ${update.body}`
+    )
+    return
+
+    let downloaded: number = 0
+    let contentLength: number | undefined = 0
+
+    await update.downloadAndInstall((event) => {
+      switch (event.event) {
+        case "Started":
+          contentLength = event.data.contentLength
+          console.log(`started downloading ${event.data.contentLength} bytes`)
+          break
+        case "Progress":
+          downloaded += event.data.chunkLength
+          console.log(`downloaded ${downloaded} from ${contentLength}`)
+          break
+        case "Finished":
+          console.log("download finished")
+          break
+      }
+    })
+
+    console.log("update installed")
+    await relaunch()
+  }
 
   return (
     <DialogContent className="overflow-clip pb-2">
@@ -60,11 +101,11 @@ export function AboutDialog() {
         <div className="mr-auto flex flex-row gap-2">
           {/* <HomeIcon
             className="h-5 w-5 cursor-pointer transition hover:text-slate-300"
-            onClick={() => open("https://github.com/MZaFaRM/DataSmithV2")}
+            onClick={() => open("https://github.com/MZaFaRM/DataSmith")}
           /> */}
           <GithubIcon
             className="h-5 w-5 cursor-pointer transition hover:text-slate-300 "
-            onClick={() => open("https://github.com/MZaFaRM/DataSmithV2")}
+            onClick={() => open("https://github.com/MZaFaRM/DataSmith")}
           />
         </div>
 
@@ -72,7 +113,7 @@ export function AboutDialog() {
           type="submit"
           variant="outline"
           className="h-7 gap-1"
-          onClick={() => setUpdateText("You have the latest version.")}
+          onClick={() => handleUpdate()}
         >
           <UpdateIcon /> Check for Updates
         </Button>

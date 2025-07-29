@@ -73,7 +73,7 @@ export function Menu() {
               "flex items-center gap-2 rounded bg-transparent px-6 py-2 text-sm font-medium",
               "text-muted-foreground hover:bg-card hover:text-accent-foreground"
             )}
-            onClick={() => openUrl("https://github.com/MZaFaRM/DataSmithV2")}
+            onClick={() => openUrl("https://github.com/MZaFaRM/DataSmith")}
           >
             <Icon icon="cib:github" className="h-5 w-5" />
             Github

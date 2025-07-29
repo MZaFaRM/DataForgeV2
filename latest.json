@@ -1,7 +1,9 @@
 {
-  "version": "1.9.0",
-  "notes": "Bug fixes and UI tweaks",
-  "pub_date": "2025-07-29T12:00:00Z",
+  "package": {
+    "version": "1.9.0",
+    "notes": "Completed first iteration.",
+    "pub_date": "2025-07-29T12:00:00Z"
+  },
   "platforms": {
     "windows-x86_64": {
       "signature": "abc123==",

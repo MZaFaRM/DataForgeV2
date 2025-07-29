@@ -38,7 +38,7 @@ export default function DashboardPage() {
                   className="semi-bold cursor-pointer text-yellow-300 hover:underline"
                   onClick={(e) => {
                     e.preventDefault()
-                    openUrl("https://github.com/MZaFaRM/DataSmithV2")
+                    openUrl("https://github.com/MZaFaRM/DataSmith")
                   }}
                 >
                   a star on github

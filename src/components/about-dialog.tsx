@@ -60,11 +60,11 @@ export function AboutDialog() {
         <div className="mr-auto flex flex-row gap-2">
           {/* <HomeIcon
             className="h-5 w-5 cursor-pointer transition hover:text-slate-300"
-            onClick={() => open("https://github.com/MZaFaRM/DataForgeV2")}
+            onClick={() => open("https://github.com/MZaFaRM/DataSmithV2")}
           /> */}
           <GithubIcon
             className="h-5 w-5 cursor-pointer transition hover:text-slate-300 "
-            onClick={() => open("https://github.com/MZaFaRM/DataForgeV2")}
+            onClick={() => open("https://github.com/MZaFaRM/DataSmithV2")}
           />
         </div>
 

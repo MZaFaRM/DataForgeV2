@@ -1,0 +1,19 @@
+{
+  "version": "1.9.0",
+  "notes": "Bug fixes and UI tweaks",
+  "pub_date": "2025-07-29T12:00:00Z",
+  "platforms": {
+    "windows-x86_64": {
+      "signature": "abc123==",
+      "url": "https://yourdomain.com/app_1.9.0_x64_en-US.msi"
+    },
+    "linux-x86_64": {
+      "signature": "def456==",
+      "url": "https://yourdomain.com/app_1.9.0_amd64.AppImage"
+    },
+    "darwin-x86_64": {
+      "signature": "ghi789==",
+      "url": "https://yourdomain.com/app_1.9.0_x64.dmg"
+    }
+  }
+}

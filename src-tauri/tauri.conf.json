@@ -1,8 +1,8 @@
 {
   "$schema": "../node_modules/@tauri-apps/cli/config.schema.json",
-  "productName": "DataForge",
+  "productName": "DataSmith",
   "version": "1.9.0",
-  "identifier": "com.mzafarm.dataforge",
+  "identifier": "com.mzafarm.datasmith",
   "build": {
     "frontendDist": "../dist",
     "devUrl": "http://localhost:5173",
@@ -13,7 +13,7 @@
     "windows": [
       {
         "decorations": true,
-        "title": "DataForge",
+        "title": "DataSmith",
         "width": 1350,
         "height": 825,
         "resizable": true,
@@ -29,6 +29,7 @@
     "active": true,
     "targets": "all",
     "externalBin": ["../sidecar/populator"],
+    "createUpdaterArtifacts": true,
     "icon": [
       "icons/32x32.png",
       "icons/128x128.png",
@@ -37,5 +38,16 @@
       "icons/icon.ico"
     ]
   },
-  "plugins": { "permissions": ["dialog:default", "dialogue:allow-save"] }
+  "plugins": {
+    "permissions": ["dialog:default", "dialogue:allow-save"],
+    "updater": {
+      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IERBQTE2NDE1MjA1RjVGNjgKUldSb1gxOGdGV1NoMnA0OUhFSmpTN1JaVTMzM1UvelEvMnd0ZEw3Tmx2UENQSWhqb25scXl3R3gK",
+      "endpoints": [
+        "https://github.com/user/repo/releases/latest/download/latest.json"
+      ]
+    },
+    "windows": {
+      "installMode": "passive"
+    }
+  }
 }

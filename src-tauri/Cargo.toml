@@ -1,10 +1,10 @@
 [package]
-name = "DataForge"
+name = "DataSmith"
 version = "1.9.0"
 description = "A Tauri-Python application for database population with sample data."
 authors = ["MZaFaRM"]
 license = "MIT"
-repository = "https://github.com/MZaFaRM/DataForgeV2"
+repository = "https://github.com/MZaFaRM/DataSmithV2"
 edition = "2021"
 rust-version = "1.77.2"
 
@@ -25,3 +25,6 @@ tauri = { version = "2.6.2", features = [] }
 tauri-plugin-log = "2"
 tauri-plugin-opener = "2"
 tauri-plugin-dialog = "2.3.1"
+
+[target.'cfg(not(any(target_os = "android", target_os = "ios")))'.dependencies]
+tauri-plugin-updater = "2"

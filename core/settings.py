@@ -1,6 +1,6 @@
 import os
 
-BASE_PATH = os.path.join(os.path.expanduser("~"), ".dataforge")
+BASE_PATH = os.path.join(os.path.expanduser("~"), ".datasmith")
 DB_PATH = os.path.join(BASE_PATH, "config.db")
 LOG_PATH = os.path.join(BASE_PATH, "logs")
 

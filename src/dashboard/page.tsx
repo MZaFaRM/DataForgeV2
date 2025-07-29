@@ -11,7 +11,7 @@ import { DBCreds, UsageInfo } from "@/components/types"
 export default function DashboardPage() {
   const [dbCreds, setDbCreds] = useState<DBCreds | null>(null)
   const [activeTable, setActiveTable] = useState<string | null>(null)
-  const [usageInfo, setUsageInfo] = useState<UsageInfo[]>([])  
+  const [usageInfo, setUsageInfo] = useState<UsageInfo[]>([])
 
   async function fetchUsageInfo() {
     try {
@@ -30,7 +30,7 @@ export default function DashboardPage() {
           <div className="flex items-center justify-between space-y-2 pr-2">
             <div>
               <div className="flex items-center">
-                <h2 className="text-lg font-semibold">Welcome to DataForge!</h2>
+                <h2 className="text-lg font-semibold">Welcome to DataSmith!</h2>
               </div>
               <p className="mt-3 text-sm text-muted-foreground">
                 If you like this project,{" "}
@@ -38,7 +38,7 @@ export default function DashboardPage() {
                   className="semi-bold cursor-pointer text-yellow-300 hover:underline"
                   onClick={(e) => {
                     e.preventDefault()
-                    openUrl("https://github.com/MZaFaRM/DataForgeV2")
+                    openUrl("https://github.com/MZaFaRM/DataSmithV2")
                   }}
                 >
                   a star on github

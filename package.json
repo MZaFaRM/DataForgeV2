@@ -1,5 +1,5 @@
 {
-  "name": "dataforge",
+  "name": "datasmith",
   "private": true,
   "version": "1.9.0",
   "scripts": {
@@ -51,6 +51,7 @@
     "@tauri-apps/plugin-opener": "~2.4.0",
     "@tauri-apps/plugin-os": "2.0.0-alpha.0",
     "@tauri-apps/plugin-shell": "2.0.0-alpha.0",
+    "@tauri-apps/plugin-updater": "~2.9.0",
     "@tauri-apps/plugin-window": "2.0.0-alpha.0",
     "@uiw/codemirror-theme-github": "^4.24.0",
     "@uiw/react-codemirror": "^4.24.0",

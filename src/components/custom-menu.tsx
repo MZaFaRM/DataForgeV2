@@ -27,12 +27,8 @@ export function Menu() {
     <div className="flex items-center border-none bg-muted py-1 lg:pl-3">
       <div className="flex w-full items-center px-2 py-1">
         <div className="mr-4 inline-flex items-center text-cyan-500">
-          <img
-            src="/icon.png"
-            alt="App icon"
-            className="h-8 w-8"
-          />
-          <span className="ml-2 font-semibold text-foreground">DataForge</span>
+          <img src="/icon.svg" alt="App icon" className="h-6 w-6" />
+          <span className="ml-2 font-semibold text-foreground">DataSmith</span>
         </div>
 
         <DropdownMenu>
@@ -77,7 +73,7 @@ export function Menu() {
               "flex items-center gap-2 rounded bg-transparent px-6 py-2 text-sm font-medium",
               "text-muted-foreground hover:bg-card hover:text-accent-foreground"
             )}
-            onClick={() => openUrl("https://github.com/MZaFaRM/DataForgeV2")}
+            onClick={() => openUrl("https://github.com/MZaFaRM/DataSmithV2")}
           >
             <Icon icon="cib:github" className="h-5 w-5" />
             Github

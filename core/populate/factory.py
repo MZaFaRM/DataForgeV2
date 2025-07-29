@@ -156,7 +156,7 @@ class DatabaseFactory:
         logger.setLevel(logging.INFO)
         logger.propagate = False
         logger.handlers.clear()
-        
+
         log_path = Path(os.path.join(LOG_PATH, f"{self.name}.sql.log"))
         log_path.parent.mkdir(parents=True, exist_ok=True)
 
@@ -433,12 +433,12 @@ class DatabaseFactory:
         os = platform.system()
 
         banner = [
-            "Welcome to the DataForge monitor.  Commands end with ; or \\g.",
+            "Welcome to the DataSmith monitor.  Commands end with ; or \\g.",
             f"Session started on {now} via {os}",
             "Connection id: 420",
             f"Forge version: 1.0.0-alchemist ({self.dialect.upper()})",
             "",
-            "Copyright (c) 2025, DataForge Initiative.",
+            "Copyright (c) 2025, DataSmith Initiative.",
             " All bugs reserved.",
             "",
             "Type 'help;' or '\\h' for help. Type 'clear;' to clear the screen.",

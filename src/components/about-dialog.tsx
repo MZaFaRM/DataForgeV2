@@ -45,27 +45,27 @@ export function AboutDialog() {
     )
     return
 
-    let downloaded: number = 0
-    let contentLength: number | undefined = 0
+    // let downloaded: number = 0
+    // let contentLength: number | undefined = 0
 
-    await update.downloadAndInstall((event) => {
-      switch (event.event) {
-        case "Started":
-          contentLength = event.data.contentLength
-          console.log(`started downloading ${event.data.contentLength} bytes`)
-          break
-        case "Progress":
-          downloaded += event.data.chunkLength
-          console.log(`downloaded ${downloaded} from ${contentLength}`)
-          break
-        case "Finished":
-          console.log("download finished")
-          break
-      }
-    })
+    // await update.downloadAndInstall((event) => {
+    //   switch (event.event) {
+    //     case "Started":
+    //       contentLength = event.data.contentLength
+    //       console.log(`started downloading ${event.data.contentLength} bytes`)
+    //       break
+    //     case "Progress":
+    //       downloaded += event.data.chunkLength
+    //       console.log(`downloaded ${downloaded} from ${contentLength}`)
+    //       break
+    //     case "Finished":
+    //       console.log("download finished")
+    //       break
+    //   }
+    // })
 
-    console.log("update installed")
-    await relaunch()
+    // console.log("update installed")
+    // await relaunch()
   }
 
   return (
